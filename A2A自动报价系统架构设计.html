@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="margin:0;padding:0;">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2A 自动报价系统架构设计</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234F6B9A'/%3E%3Ccircle cx='9' cy='16' r='3.2' fill='%23fff'/%3E%3Ccircle cx='23' cy='9' r='3.2' fill='%239FD0C8'/%3E%3Ccircle cx='23' cy='23' r='3.2' fill='%239FD0C8'/%3E%3Cg stroke='%23fff' stroke-width='1.6'%3E%3Cpath d='M11.6 14.6 20.4 10.4'/%3E%3Cpath d='M11.6 17.4 20.4 21.6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Noto+Serif+SC:wght@600;700;900&display=swap">
+<style>
+:root{
+  --ink:#1A1B1C; --ink2:#5F6670; --ink3:#8A8F98;
+  --line:#E4E3DD; --line2:#D7D6CF; --bg:#F7F7F5; --paper:#FFFFFF;
+  --buyer:#4F6B9A; --buyer-bg:#EEF2F8; --buyer-line:#C7D4E6;
+  --seller:#2F7D74; --seller-bg:#E8F2F0; --seller-line:#BFDAD4;
+  --market:#5B616B; --market-bg:#EFF0ED; --market-line:#D3D5D0;
+  --gov:#9A6A2F; --gov-bg:#F8F1E5; --gov-line:#E4D2B2;
+  --ok:#35705A; --err:#A14E50;
+  --sans:'Noto Sans SC',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --serif:'Noto Serif SC','Songti SC',serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+a{color:var(--buyer);text-decoration:none;}
+h1,h2,h3,h4{margin:0;font-weight:700;line-height:1.3;}
+p{margin:0 0 12px;}
+code{font-family:var(--mono);font-size:.86em;background:var(--market-bg);
+  border:1px solid var(--line);border-radius:4px;padding:.05em .4em;color:#3A414B;}
+
+/* ---------- top nav ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(247,247,245,.98);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+.topnav .wrap{display:flex;align-items:center;gap:18px;height:52px;}
+.brand{font-weight:700;font-size:14px;letter-spacing:.02em;white-space:nowrap;display:flex;align-items:center;gap:9px;}
+.brand .dot{width:18px;height:18px;border-radius:4px;background:var(--buyer);position:relative;flex:none;}
+.brand .dot::before{content:"";position:absolute;inset:4px;background:
+  radial-gradient(circle at 30% 30%,#fff 0,#fff 1.6px,transparent 1.8px),
+  radial-gradient(circle at 75% 70%,#9FD0C8 0,#9FD0C8 1.6px,transparent 1.8px);}
+.navlinks{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;}
+.navlinks::-webkit-scrollbar{display:none;}
+.navlinks a{font-size:13px;color:var(--ink2);padding:6px 10px;border-radius:5px;white-space:nowrap;}
+.navlinks a:hover{background:var(--market-bg);color:var(--ink);}
+.navlinks a.active{color:var(--buyer);background:var(--buyer-bg);font-weight:500;}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 44px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#FBFBFA 0%,var(--bg) 100%);}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center;}
+.kicker{font-family:var(--mono);font-size:12.5px;color:var(--buyer);letter-spacing:.08em;margin-bottom:18px;}
+.hero h1{font-family:var(--serif);font-size:42px;font-weight:900;letter-spacing:-.01em;margin-bottom:18px;}
+.hero .sub{font-size:16.5px;color:var(--ink2);max-width:34em;margin-bottom:26px;}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;}
+.chip{font-size:12.5px;border:1px solid var(--line2);background:var(--paper);border-radius:20px;
+  padding:5px 13px;color:var(--ink2);}
+.chip b{color:var(--ink);font-weight:500;}
+.hero-fig{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:18px;}
+.hero-fig .cap{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:10px;text-align:center;}
+
+/* ---------- section frame ---------- */
+section{padding:54px 0 8px;}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--ink3);font-weight:400;}
+.sec-head h2{font-family:var(--serif);font-size:27px;font-weight:700;}
+.sec-lead{color:var(--ink2);max-width:46em;margin:6px 0 26px;font-size:15px;}
+.sheet{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:24px;margin:18px 0;}
+.sheet > h4{font-size:14px;margin-bottom:14px;color:var(--ink);display:flex;align-items:center;gap:8px;}
+.note{font-size:13px;color:var(--ink2);background:var(--market-bg);border-left:3px solid var(--market);
+  padding:11px 15px;border-radius:0 6px 6px 0;margin:16px 0;}
+.note.gov{background:var(--gov-bg);border-left-color:var(--gov);}
+.note b{color:var(--ink);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+
+/* domain logic labels */
+.dom{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:400;
+  padding:1px 7px;border-radius:4px;letter-spacing:.04em;vertical-align:middle;}
+.dom.buyer{background:var(--buyer-bg);color:var(--buyer);border:1px solid var(--buyer-line);}
+.dom.seller{background:var(--seller-bg);color:var(--seller);border:1px solid var(--seller-line);}
+.dom.market{background:var(--market-bg);color:var(--market);border:1px solid var(--market-line);}
+.dom.gov{background:var(--gov-bg);color:var(--gov);border:1px solid var(--gov-line);}
+
+/* ---------- actor cards ---------- */
+.actor{border:1px solid var(--line);border-radius:8px;padding:16px 17px;background:var(--paper);height:100%;}
+.actor .role{font-size:11px;font-family:var(--mono);color:var(--ink3);margin-bottom:5px;}
+.actor h4{font-size:15.5px;margin-bottom:7px;}
+.actor p{font-size:13px;color:var(--ink2);margin:0;}
+.actor.buyer{border-top:3px solid var(--buyer);}
+.actor.seller{border-top:3px solid var(--seller);}
+.actor.market{border-top:3px solid var(--market);}
+.actor.gov{border-top:3px solid var(--gov);}
+
+/* ---------- layered architecture ---------- */
+.layer{display:grid;grid-template-columns:138px 1fr;border:1px solid var(--line);border-bottom:none;}
+.layer:last-child{border-bottom:1px solid var(--line);}
+.layer:first-child{border-radius:8px 8px 0 0;}
+.layer:last-child{border-radius:0 0 8px 8px;}
+.layer-tag{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;}
+.layer-tag .lt-name{font-weight:700;font-size:13.5px;}
+.layer-tag .lt-en{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px;line-height:1.4;}
+.layer-body{padding:12px;display:flex;flex-wrap:wrap;gap:9px;align-content:center;background:var(--paper);}
+.cell{border:1px solid var(--line2);border-radius:6px;padding:9px 11px;background:#FCFCFB;min-width:128px;flex:1;}
+.cell .cn{font-size:13px;font-weight:500;line-height:1.35;}
+.cell .cd{font-size:11.5px;color:var(--ink3);margin-top:3px;line-height:1.4;}
+.cell.buyer{border-left:3px solid var(--buyer);}
+.cell.seller{border-left:3px solid var(--seller);}
+.cell.market{border-left:3px solid var(--market);}
+.cell.gov{border-left:3px solid var(--gov);}
+.layer.l-buyer .layer-tag{background:var(--buyer-bg);}
+.layer.l-seller .layer-tag{background:var(--seller-bg);}
+.layer.l-market .layer-tag{background:var(--market-bg);}
+.layer.l-gov{grid-template-columns:138px 1fr;background:var(--gov-bg);}
+.layer.l-gov .layer-tag{background:transparent;}
+.layer.l-gov .layer-body{background:var(--gov-bg);}
+.layer.l-gov .cell{background:#FDFBF6;}
+.layer.l-base .layer-tag{background:var(--market-bg);}
+.cross-rail{display:flex;gap:9px;flex-wrap:wrap;}
+.cross-rail .cell{flex:1;min-width:150px;}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:4px 0 2px;font-size:12px;color:var(--ink2);}
+.legend span{display:inline-flex;align-items:center;gap:7px;}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block;}
+.sw.buyer{background:var(--buyer);} .sw.seller{background:var(--seller);}
+.sw.market{background:var(--market);} .sw.gov{background:var(--gov);}
+
+/* ---------- phase / stage flow ---------- */
+.phases{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+.phase{border:1px solid var(--line);padding:0;position:relative;background:var(--paper);}
+.phase + .phase{border-left:none;}
+.phase .ph-head{padding:11px 14px;border-bottom:1px solid var(--line);}
+.ph-head .ph-no{font-family:var(--mono);font-size:10.5px;color:var(--ink3);}
+.ph-head .ph-name{font-size:14px;font-weight:700;margin-top:2px;}
+.phase ul{list-style:none;margin:0;padding:10px 14px;}
+.phase li{font-size:12.5px;color:var(--ink2);padding:5px 0 5px 17px;position:relative;line-height:1.45;}
+.phase li::before{content:"";position:absolute;left:0;top:11px;width:7px;height:7px;border:1.5px solid var(--market);
+  border-radius:50%;background:var(--paper);}
+.phase.p1 .ph-head{background:var(--buyer-bg);} .phase.p1 li::before{border-color:var(--buyer);}
+.phase.p2 .ph-head{background:var(--seller-bg);} .phase.p2 li::before{border-color:var(--seller);}
+.phase.p3 .ph-head{background:var(--market-bg);} .phase.p3 li::before{border-color:var(--market);}
+.phase.p4 .ph-head{background:#EAF1EC;} .phase.p4 li::before{border-color:var(--ok);}
+.phase.p4{border-radius:0 8px 8px 0;} .phase.p1{border-radius:8px 0 0 8px;}
+.gate{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;}
+.gate .g{flex:1;min-width:200px;border:1px dashed var(--gov-line);background:var(--gov-bg);border-radius:6px;
+  padding:9px 13px;font-size:12.5px;color:#6f5326;}
+.gate .g b{color:var(--gov);}
+
+/* ---------- generic tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--paper);}
+.tbl-wrap{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:16px 0;}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+th{background:var(--market-bg);font-weight:700;font-size:12.5px;color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+td .mono,td code{font-size:12px;}
+.tbl-wrap table{table-layout:fixed;}
+
+/* ---------- timeline roadmap ---------- */
+.road{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:8px;}
+.mile{position:relative;padding:0 14px;}
+.mile .rail{position:relative;height:2px;background:var(--line2);margin:9px 0 20px;}
+.mile .rail::before{content:"";position:absolute;left:0;top:-5px;width:12px;height:12px;border-radius:50%;
+  background:var(--paper);border:2.5px solid var(--buyer);}
+.mile:last-child .rail{background:linear-gradient(90deg,var(--line2),var(--line2));}
+.mile .m-time{font-family:var(--mono);font-size:11.5px;color:var(--buyer);font-weight:500;}
+.mile h4{font-size:14px;margin:2px 0 7px;}
+.mile p{font-size:12.5px;color:var(--ink2);margin:0;}
+
+/* ---------- engine IPO ---------- */
+.ipo{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:0;align-items:stretch;}
+.ipo .col{padding:16px 17px;border:1px solid var(--line);background:var(--paper);}
+.ipo .col.in{border-right:none;background:#FBFCFD;}
+.ipo .col.out{border-left:none;background:#FBFCFB;}
+.ipo .col h4{font-size:13.5px;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--line);}
+.ipo ul{list-style:none;margin:0;padding:0;}
+.ipo li{font-size:12.5px;color:var(--ink2);padding:5px 0;line-height:1.45;}
+.ipo li b{color:var(--ink);font-weight:500;}
+.llm-box{border:1.5px dashed var(--gov-line);border-radius:7px;padding:12px 13px;margin-top:11px;background:var(--gov-bg);}
+.llm-box .t{font-size:12.5px;font-weight:700;color:var(--gov);margin-bottom:5px;}
+.llm-box p{font-size:12px;color:#6f5326;margin:0;}
+.arrow-h{display:none;}
+
+/* ---------- hitl matrix ---------- */
+.matrix td.lvl{font-family:var(--mono);font-size:12px;white-space:nowrap;}
+.tag-auto{color:var(--ok);font-weight:600;}
+.tag-hitl{color:var(--gov);font-weight:600;}
+.tag-deny{color:var(--err);font-weight:600;}
+
+/* ---------- json contract ---------- */
+pre.code{background:#23272E;color:#D8DEE6;border-radius:8px;padding:18px 20px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.65;margin:0;}
+pre.code .k{color:#8FB3E0;} pre.code .s{color:#A9CE9B;} pre.code .c{color:#7C8590;font-style:italic;}
+pre.code .n{color:#E0A878;}
+
+/* ---------- deploy ---------- */
+.deploy{display:grid;grid-template-columns:1fr 150px 1fr;gap:0;align-items:stretch;}
+.org{border:2px solid var(--line2);border-radius:10px;padding:15px;background:var(--paper);}
+.org.buyer-org{border-color:var(--buyer-line);}
+.org.seller-org{border-color:var(--seller-line);}
+.org .org-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.org .stack-item{border:1px solid var(--line);border-radius:6px;padding:8px 11px;font-size:12.5px;margin-bottom:8px;background:#FCFCFB;}
+.org .stack-item small{display:block;color:var(--ink3);font-size:11px;margin-top:1px;}
+.mid-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 8px;}
+.mid-node{width:100%;text-align:center;border:1.5px solid var(--market);background:var(--market-bg);border-radius:8px;
+  padding:11px 8px;font-size:12.5px;font-weight:600;color:var(--market);}
+.mid-node small{display:block;font-weight:400;color:var(--ink3);font-size:10.5px;margin-top:2px;}
+.link-label{font-family:var(--mono);font-size:10px;color:var(--ink3);text-align:center;line-height:1.4;}
+
+/* ---------- reliability cards ---------- */
+.rel{border:1px solid var(--line);border-radius:8px;padding:15px 17px;background:var(--paper);height:100%;}
+.rel h4{font-size:14px;margin-bottom:7px;}
+.rel p{font-size:12.8px;color:var(--ink2);margin:0;}
+.rel .pat{font-family:var(--mono);font-size:11px;color:var(--buyer);display:block;margin-bottom:6px;}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding:30px 0 50px;color:var(--ink3);font-size:12.5px;}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+
+/* ---------- responsive ---------- */
+.grid2>*,.grid3>*,.grid4>*,.phases>*,.road>*,.ipo>*,.deploy>*,.layer-body>*,.cross-rail>*{min-width:0;}
+pre.code{max-width:100%;}
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:1fr;gap:30px;}
+  .hero h1{font-size:33px;}
+  .grid4{grid-template-columns:1fr 1fr;}
+  .grid3{grid-template-columns:1fr;}
+  .grid2{grid-template-columns:1fr;}
+  .phases{grid-template-columns:1fr 1fr;}
+  .phase + .phase{border-left:1px solid var(--line);}
+  .phase.p1,.phase.p2{border-radius:0;}
+  .road{grid-template-columns:1fr 1fr;gap:18px 10px;}
+  .ipo{grid-template-columns:1fr;}
+  .ipo .col.in,.ipo .col.out{border:1px solid var(--line);}
+  .deploy{grid-template-columns:1fr;}
+  .mid-col{flex-direction:row;flex-wrap:wrap;padding:12px 0;}
+  .layer{grid-template-columns:1fr;}
+  .layer-tag{border-right:none;border-bottom:1px solid var(--line);flex-direction:row;gap:10px;align-items:baseline;}
+}
+@media (max-width:600px){
+  .wrap{padding:0 17px;}
+  .hero{padding:44px 0 32px;}
+  .hero h1{font-size:27px;}
+  .phases{grid-template-columns:1fr;}
+  .grid4{grid-template-columns:1fr;}
+  .road{grid-template-columns:1fr;}
+  .sheet{padding:16px;}
+  .topnav .wrap{height:auto;min-height:52px;padding-top:7px;padding-bottom:7px;}
+  .navlinks a{padding:11px 12px;}
+  .rel p,.actor p,.ipo li,.phase li,.mile p,.deploy .stack-item{font-size:13.5px;}
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>A2A 自动报价系统</div>
+    <div class="navlinks" id="navlinks">
+      <a href="#overview">概述</a>
+      <a href="#actors">角色</a>
+      <a href="#architecture">分层架构</a>
+      <a href="#flow">业务流程</a>
+      <a href="#sequence">协议时序</a>
+      <a href="#state">状态机</a>
+      <a href="#engine">报价引擎</a>
+      <a href="#trust">信任治理</a>
+      <a href="#reliability">可靠性</a>
+      <a href="#deployment">部署</a>
+      <a href="#stack">选型</a>
+      <a href="#roadmap">路线</a>
+      <a href="#contract">数据契约</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker">ARCHITECTURE BLUEPRINT · v1.0 · CONCEPTUAL DESIGN</div>
+      <h1>Agent-to-Agent<br>自动报价系统架构设计</h1>
+      <p class="sub">基于开放的 A2A（Agent2Agent）协议，让分属不同组织的买方智能体与卖方智能体自动完成「询价 → 报价 → 比价/议价 → 授标 → 成交结算」的跨企业交易闭环；LLM 负责理解、编排与协商，确定性规则与模型掌握定价边界，关键决策保留人在回路。</p>
+      <div class="meta-row">
+        <span class="chip">文档类型 <b>· 系统架构设计</b></span>
+        <span class="chip">主场景 <b>· B2B 采购 / 供应链招投标</b></span>
+        <span class="chip">版本 <b>· v1.0</b></span>
+        <span class="chip">日期 <b>· 2026-09</b></span>
+      </div>
+    </div>
+    <div class="hero-fig">
+      <svg viewBox="0 0 360 232" width="100%" role="img" aria-label="A2A 报价参与方示意">
+        <defs>
+          <marker id="ar" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#8A8F98"/></marker>
+        </defs>
+        <!-- buyer -->
+        <rect x="16" y="86" width="92" height="60" rx="8" fill="#EEF2F8" stroke="#4F6B9A" stroke-width="1.5"/>
+        <text x="62" y="110" text-anchor="middle" font-size="12.5" font-weight="700" fill="#4F6B9A">买方 Agent</text>
+        <text x="62" y="128" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">RFQ / Award</text>
+        <!-- marketplace -->
+        <rect x="138" y="80" width="84" height="72" rx="8" fill="#EFF0ED" stroke="#5B616B" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="180" y="101" text-anchor="middle" font-size="11.5" font-weight="700" fill="#5B616B">注册发现</text>
+        <text x="180" y="120" text-anchor="middle" font-size="11.5" font-weight="700" fill="#5B616B">撮合 / 协调</text>
+        <text x="180" y="138" text-anchor="middle" font-size="9" fill="#8A8F98" font-family="monospace">Agent Card</text>
+        <!-- suppliers -->
+        <rect x="252" y="26" width="92" height="52" rx="8" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+        <text x="298" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#2F7D74">卖方 Agent A</text>
+        <text x="298" y="65" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">Quote</text>
+        <rect x="252" y="154" width="92" height="52" rx="8" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+        <text x="298" y="176" text-anchor="middle" font-size="12" font-weight="700" fill="#2F7D74">卖方 Agent B</text>
+        <text x="298" y="193" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">Quote</text>
+        <!-- links -->
+        <path d="M108 106 C124 100 126 102 138 104" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M138 124 C124 128 124 126 108 128" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M222 100 C240 80 240 62 252 56" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M252 176 C238 168 236 150 222 136" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M252 64 C236 84 238 104 222 116" fill="none" stroke="#B9C0C9" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+        <path d="M222 124 C240 140 240 160 252 168" fill="none" stroke="#B9C0C9" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+      </svg>
+      <div class="cap">跨组织 A2A 协作 · 示意（非官方拓扑）</div>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">01</span><h2>概述与设计目标</h2></div>
+    <p class="sec-lead">A2A 自动报价系统把「人对人 / 门户对门户」的询价报价流程，升级为「智能体对智能体」的自动化协作：每个组织在自己的安全边界内运行 Agent，对外通过开放协议交换结构化的询价单（RFQ）与报价单（Quote），对内通过工具接口调用库存、产能、成本与定价能力。它不是让 LLM 随意报价，而是一套<b>协议互通 + 确定性定价 + 可控自治 + 全程留痕</b>的交易基础设施。</p>
+
+    <div class="grid3" style="margin-top:20px;">
+      <div class="rel"><span class="pat">GOAL · 01</span><h4>互操作 Interoperable</h4><p>基于开放 A2A 协议与 JSON Schema 化的 RFQ / Quote，不同厂商、不同模型构建的异构 Agent 可跨组织「即插即用」，无需点对点定制对接。</p></div>
+      <div class="rel"><span class="pat">GOAL · 02</span><h4>自动化 Automated</h4><p>LLM 完成需求理解、任务编排、多轮澄清与谈判；规则 / 定价模型完成可承诺量校验与定价，询价到报价在 SLA 内免人工，异常才升级。</p></div>
+      <div class="rel"><span class="pat">GOAL · 03</span><h4>可信 Trustworthy</h4><p>组织与 Agent 强身份认证、最小授权、密封报价开标前不可见、可验证资质凭证、全链路不可篡改审计，防止越权报价与围标串标。</p></div>
+      <div class="rel"><span class="pat">GOAL · 04</span><h4>可靠 Reliable</h4><p>幂等键、超时重试、报价有效期锁价、Saga 补偿与 Outbox/Inbox，保障跨组织长流程的最终一致，失败可重放、可对账。</p></div>
+      <div class="rel"><span class="pat">GOAL · 05</span><h4>可治理 Governable</h4><p>金额阈值、自动决策边界、人在回路（HITL）权限矩阵、价格护栏与合规筛查全部策略化，自治程度可按风险动态调节。</p></div>
+      <div class="rel"><span class="pat">GOAL · 06</span><h4>可扩展 · 可观测</h4><p>新供应商发布 Agent Card 即可被发现与接入；跨 Agent 透传 Trace，指标 / 日志 / 会话可追踪、可重放、可度量。</p></div>
+    </div>
+
+    <div class="note gov" style="margin-top:22px;">
+      <b>核心设计原则 —— LLM 不直接定价。</b>LLM 负责非结构化信息理解、规划、多轮澄清与谈判话术、以及给出可解释说明；<b>价格数字由确定性规则 / 定价模型在授权区间（底价、目标毛利、折扣权限）内给出</b>。LLM 只能在该可行区间内协商，任何越界、低于成本红线或命中合规规则的请求都会被护栏拦截并升级人工，从根上杜绝「模型乱报价」。
+    </div>
+
+    <div class="grid2" style="margin-top:18px;">
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom buyer">适用</span> 典型落地场景</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">B2B 原材料 / MRO / 服务采购与供应链询价、招投标与反向拍卖、物流与航运运价、云资源 / API 等服务类交易、保险报价与金融产品报价（后者须叠加行业合规与适当性适配）。共同特征：<b>非标或半标、多供应商、需要多轮协商、交易金额值得自动化提效</b>。</p>
+      </div>
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom gov">边界</span> 不适用 / 需谨慎</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">大额或高风险成交不得无条件全自动，必须经 HITL；场内高度标准化合约应由交易所撮合引擎而非 A2A 议价完成；强监管品种在合规适配前不开放自动报价；<b>A2A 面向任务级长会话，不承担毫秒级行情做市</b>，后者需专用低延迟系统。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="actors">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">02</span><h2>参与角色与信任边界</h2></div>
+    <p class="sec-lead">系统由「三方组织域 + 横切信任机构」构成：买方域、若干卖方域各自在私有边界内运行 Agent；市场运营方只做中立的发现、撮合与见证，<b>不触碰各方成本 / 底价等商业机密</b>；身份与审批能力横切所有域。</p>
+    <div class="grid4">
+      <div class="actor buyer"><div class="role">BUYER DOMAIN</div><h4>买方智能体</h4><p>需求解析与 RFQ 构建、采购策略、供应商发现与资格初筛、多属性比价、还价策略、授标建议，对接企业采购 / 财务系统。</p></div>
+      <div class="actor seller"><div class="role">SUPPLIER DOMAIN ×N</div><h4>卖方智能体</h4><p>受理 RFQ、资格预审、可承诺量（ATP）/ 产能 / 库存校验、成本核算与定价、生成并提交报价、参与多轮议价。</p></div>
+      <div class="actor market"><div class="role">NEUTRAL PARTY</div><h4>市场运营 / 编排方</h4><p>维护注册目录与能力市场、组织询价 / 竞价会话、管理截止与开标、提供中立时钟与审计见证，不参与定价。</p></div>
+      <div class="actor market"><div class="role">DISCOVERY</div><h4>注册中心 Registry</h4><p>托管各 Agent 的 Agent Card（端点、技能、认证方式、流式 / 推送能力）、资质凭证与信誉分，支撑能力匹配与发现。</p></div>
+      <div class="actor gov"><div class="role">TRUST</div><h4>身份与信任机构</h4><p>OIDC / OAuth2、mTLS 证书、DID 与可验证凭证（VC）签发，绑定 Agent 与所属组织，提供资质、授权与签章信任根。</p></div>
+      <div class="actor gov"><div class="role">HUMAN-IN-THE-LOOP</div><h4>人工审批节点</h4><p>买卖双方的审批人：超折扣 / 超金额报价、新供应商、异常低价、大额授标等场景，通过推送通知介入批准或否决。</p></div>
+      <div class="actor market"><div class="role">SYSTEMS OF RECORD</div><h4>企业后端系统</h4><p>ERP / CRM / PIM 商品目录 / WMS 库存 / APS 产能 / 财务 / 汇率，经 MCP 工具网关被各自 Agent 安全调用，数据不出域。</p></div>
+      <div class="actor market"><div class="role">SETTLEMENT</div><h4>合同与结算</h4><p>授标后生成合同 / 采购订单、CA 电子签章、履约与验收、发票、支付或资金托管（Escrow）、四方对账。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">03</span><h2>总体分层架构</h2></div>
+    <p class="sec-lead">自上而下分为接入渠道、买方 / 卖方两套 Agent 运行时、A2A 协作协议层、交易服务层、横切的信任治理面，以及集成数据与基础设施。<b>买方与卖方 Agent 运行时分别部署在各自组织边界内，仅经 A2A 协议层跨域通信</b>；成本、底价、库存等敏感数据不下本地域。</p>
+
+    <div class="legend">
+      <span><i class="sw buyer"></i>买方域（采购方）</span>
+      <span><i class="sw seller"></i>卖方域（供应方 ×N）</span>
+      <span><i class="sw market"></i>中立平台 / 共享能力</span>
+      <span><i class="sw gov"></i>信任与治理（横切）</span>
+    </div>
+
+    <div class="sheet" style="padding:18px;">
+      <!-- L0 -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">接入渠道</div><div class="lt-en">L0 · Channels</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">买方工作台 / 审批端</div><div class="cd">需求录入 · 授标批准</div></div>
+          <div class="cell market"><div class="cn">卖方运营 / 报价端</div><div class="cd">报价复核 · 权限审批</div></div>
+          <div class="cell market"><div class="cn">开放 API / Webhook</div><div class="cd">系统对接 · 异步回调</div></div>
+          <div class="cell market"><div class="cn">企业 IM · 邮件 · 移动推送</div><div class="cd">HITL 通知与代办</div></div>
+        </div>
+      </div>
+      <!-- L1 buyer -->
+      <div class="layer l-buyer">
+        <div class="layer-tag"><div class="lt-name">买方 Agent 运行时</div><div class="lt-en">L1 · Buyer Agent</div></div>
+        <div class="layer-body">
+          <div class="cell buyer"><div class="cn">需求理解与规划</div><div class="cd">Intent → 规格 / 量 / 交期</div></div>
+          <div class="cell buyer"><div class="cn">采购与授标策略</div><div class="cd">询价范围 · 预算 · 评标办法</div></div>
+          <div class="cell buyer"><div class="cn">报价评估与谈判</div><div class="cd">TCO 评分 · 还价策略</div></div>
+          <div class="cell buyer"><div class="cn">Agent 内核</div><div class="cd">LLM 编排 · 记忆 · 工具调用</div></div>
+          <div class="cell buyer"><div class="cn">输出护栏</div><div class="cd">预算红线 · 合规校验</div></div>
+          <div class="cell buyer"><div class="cn">HITL 审批网关</div><div class="cd">大额授标升级</div></div>
+        </div>
+      </div>
+      <!-- L1 seller -->
+      <div class="layer l-seller">
+        <div class="layer-tag"><div class="lt-name">卖方 Agent 运行时</div><div class="lt-en">L1 · Supplier Agent</div></div>
+        <div class="layer-body">
+          <div class="cell seller"><div class="cn">RFQ 受理与资格预审</div><div class="cd">能否做 · 是否接</div></div>
+          <div class="cell seller"><div class="cn">ATP / 产能 / 库存校验</div><div class="cd">可承诺量 · 交期</div></div>
+          <div class="cell seller"><div class="cn">成本核算与定价引擎</div><div class="cd">规则 / 模型在授权区间定价</div></div>
+          <div class="cell seller"><div class="cn">报价生成与还价</div><div class="cd">结构化 Quote · 谈判策略</div></div>
+          <div class="cell seller"><div class="cn">Agent 内核 + 护栏</div><div class="cd">LLM 编排 · 底价不可越界</div></div>
+          <div class="cell seller"><div class="cn">HITL 审批网关</div><div class="cd">超折扣 / 超权限升级</div></div>
+        </div>
+      </div>
+      <!-- L2 A2A -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">A2A 协作协议层</div><div class="lt-en">L2 · A2A Protocol</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">Agent Card 能力发现</div><div class="cd">/.well-known/agent.json</div></div>
+          <div class="cell market"><div class="cn">A2A Server / Client</div><div class="cd">JSON-RPC 2.0 over HTTPS</div></div>
+          <div class="cell market"><div class="cn">Task 生命周期</div><div class="cd">submitted→working→completed</div></div>
+          <div class="cell market"><div class="cn">Message / Part / Artifact</div><div class="cd">文本 · 文件 · 结构化数据</div></div>
+          <div class="cell market"><div class="cn">SSE 流式 + Push 推送</div><div class="cd">长任务异步回传</div></div>
+          <div class="cell market"><div class="cn">多 Agent 编排</div><div class="cd">Fan-out 询价 / 竞价会话</div></div>
+          <div class="cell market"><div class="cn">协议适配</div><div class="cd">A2A ↔ EDI / REST</div></div>
+        </div>
+      </div>
+      <!-- L3 transaction -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">交易服务层</div><div class="lt-en">L3 · Transaction</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">RFQ / 询价管理</div><div class="cd">模板 · 截止 · 条款</div></div>
+          <div class="cell market"><div class="cn">报价单与版本管理</div><div class="cd">有效期 · 币种 · 税 · 贸易条款</div></div>
+          <div class="cell market"><div class="cn">比价 / 竞价引擎</div><div class="cd">密封招标 · 反向拍卖</div></div>
+          <div class="cell market"><div class="cn">多属性评分授标</div><div class="cd">TCO · 约束优化 · 授标建议</div></div>
+          <div class="cell market"><div class="cn">定价 / 折扣策略中心</div><div class="cd">价表 · 底价 · 权限矩阵</div></div>
+          <div class="cell market"><div class="cn">规则引擎</div><div class="cd">资格 · 授信 · 贸易管制筛查</div></div>
+          <div class="cell market"><div class="cn">合同 / 订单（PO）</div><div class="cd">模板 · 电子签章</div></div>
+        </div>
+      </div>
+      <!-- L4 governance cross-cutting -->
+      <div class="layer l-gov">
+        <div class="layer-tag"><div class="lt-name">信任与治理</div><div class="lt-en">L4 · Cross-cutting</div></div>
+        <div class="layer-body">
+          <div class="cross-rail" style="width:100%;">
+            <div class="cell gov"><div class="cn">身份认证 SSO / mTLS</div></div>
+            <div class="cell gov"><div class="cn">授权与同意 Scope</div></div>
+            <div class="cell gov"><div class="cn">密封报价 / TEE 解密</div></div>
+            <div class="cell gov"><div class="cn">风控 · 反围标串标</div></div>
+            <div class="cell gov"><div class="cn">限额 · 护栏 · HITL 升级</div></div>
+            <div class="cell gov"><div class="cn">审计 · 合规留痕</div></div>
+            <div class="cell gov"><div class="cn">可观测 Trace / 重放</div></div>
+          </div>
+        </div>
+      </div>
+      <!-- L5 integration/data -->
+      <div class="layer l-base">
+        <div class="layer-tag"><div class="lt-name">集成与数据</div><div class="lt-en">L5 · Integration</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">MCP 工具网关</div><div class="cd">ERP/CRM/PIM/WMS/APS/财务</div></div>
+          <div class="cell market"><div class="cn">业务库</div><div class="cd">报价 · 价表 · 供应商主数据</div></div>
+          <div class="cell market"><div class="cn">会话 / 任务库</div><div class="cd">A2A Task 状态持久化</div></div>
+          <div class="cell market"><div class="cn">事件总线 Kafka / MQ</div><div class="cd">事件驱动 · Saga · Outbox</div></div>
+          <div class="cell market"><div class="cn">缓存 · 向量库</div><div class="cd">记忆 · 历史成交检索</div></div>
+          <div class="cell market"><div class="cn">外部网络</div><div class="cd">支付 · 签章 · 征信 · 物流</div></div>
+        </div>
+      </div>
+      <!-- L6 infra -->
+      <div class="layer l-base">
+        <div class="layer-tag"><div class="lt-name">基础设施</div><div class="lt-en">L6 · Infra</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">多租户 · 容器 / K8s</div></div>
+          <div class="cell market"><div class="cn">API 网关 / Service Mesh</div></div>
+          <div class="cell market"><div class="cn">KMS / Secret 管理</div></div>
+          <div class="cell market"><div class="cn">跨组织联邦部署</div></div>
+          <div class="cell market"><div class="cn">多区域容灾</div></div>
+          <div class="cell market"><div class="cn">LLM 网关</div><div class="cd">多模型 · 限流 · Token 审计</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>读图要点：</b>L4 信任与治理是<b>横切面</b>，逻辑上贯穿 L0–L6 每一层（图中为便于排版平铺一处）；L5–L6 中涉及商业机密的部分（成本、底价、库存、产能）始终留在各组织私有域，跨域只交换经授权的 RFQ / Quote 与必要凭证。<b>A2A 负责 Agent 与 Agent 之间的协作，MCP 负责 Agent 与企业内部工具 / 数据之间的连接</b>，二者正交、不互相替代。</div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">04</span><h2>端到端业务流程</h2></div>
+    <p class="sec-lead">一次自动报价交易沿四个阶段、16 个步骤推进，阶段之间设置强制「阶段门（Gate）」。常规路径由 Agent 自动流转，命中风险条件则在阶段门处升级人工或被拦截，形成<b>「默认自动、边界可控」</b>的自治模型。</p>
+
+    <div class="sheet" style="padding:18px;">
+      <div class="phases">
+        <div class="phase p1">
+          <div class="ph-head"><div class="ph-no">PHASE 1</div><div class="ph-name">询价与发现</div></div>
+          <ul>
+            <li>需求结构化，生成 RFQ（规格 / 数量 / 交期 / 条款 / 评标办法 / 截止）</li>
+            <li>拉取 Agent Card，按能力 / 地域 / 品类匹配供应商</li>
+            <li>校验资质、授信与可验证凭证（VC）</li>
+            <li>密封或公开方式 Fan-out 分发询价任务</li>
+          </ul>
+        </div>
+        <div class="phase p2">
+          <div class="ph-head"><div class="ph-no">PHASE 2</div><div class="ph-name">受理与报价</div></div>
+          <ul>
+            <li>卖方资格预审，决定是否投标</li>
+            <li>ATP / 产能 / 库存校验，核算可承诺交期</li>
+            <li>成本拆解与定价引擎在授权区间出价</li>
+            <li>护栏校验；超权限转人工，提交结构化 Quote</li>
+          </ul>
+        </div>
+        <div class="phase p3">
+          <div class="ph-head"><div class="ph-no">PHASE 3</div><div class="ph-name">评标与授标</div></div>
+          <ul>
+            <li>澄清问答与多轮还价，报价版本化留痕</li>
+            <li>截止开标（密封）或实时反向竞价</li>
+            <li>币种 / 税 / 贸易条款 / 交期归一化，TCO 评分</li>
+            <li>输出授标建议；大额 / 异常经人审后授标</li>
+          </ul>
+        </div>
+        <div class="phase p4">
+          <div class="ph-head"><div class="ph-no">PHASE 4</div><div class="ph-name">成交与履约</div></div>
+          <ul>
+            <li>生成合同 / 采购订单（PO），CA 电子签章</li>
+            <li>订单履约、发货与验收</li>
+            <li>发票、支付或资金托管（Escrow）</li>
+            <li>四方对账，绩效与信誉回流、价格学习</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="gate">
+        <div class="g"><b>G1 资格门</b>：资质 / 授信 / 制裁筛查不通过 → 不邀请或不予受理。</div>
+        <div class="g"><b>G2 定价授权门</b>：低于成本红线或超出折扣权限 → 拦截并升级 HITL。</div>
+        <div class="g"><b>G3 开标门</b>：截止前密封报价任何人不可见；到时阈值解密开标。</div>
+        <div class="g"><b>G4 授标门</b>：按金额 / 异常度 / 新供应商触发人审，其余自动授标。</div>
+      </div>
+    </div>
+    <div class="note">报价均带<b>有效期（Validity）与幂等键</b>：过期自动失效（流拍 / 流单），中标后在有效期内锁价转单；授标后若首选方履约失败，按预案顺延次优中标人或触发补偿流程重新询价（见第 09 节）。</div>
+  </div>
+</section>
+
+<section id="sequence">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">05</span><h2>A2A 协议交互时序</h2></div>
+    <p class="sec-lead">下图以一次「买方对两家卖方」的密封询价为例，给出跨组织的 A2A 消息流：先经 Agent Card 发现，再以 JSON-RPC 任务方式提交询价，卖方通过 SSE 回报进度、在私有域内经 MCP 完成定价、超权限时推送人工审批，最后回传结构化报价并完成多轮议价与授标。</p>
+    <div class="sheet" style="padding:16px;">
+      <div style="overflow-x:auto;">
+      <svg viewBox="0 0 1040 678" width="100%" style="min-width:820px;height:auto;" role="img" aria-label="A2A 协议交互时序图">
+        <defs>
+          <marker id="sqArr" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto">
+            <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#6b7280"/></marker>
+        </defs>
+        <style>
+          .hd{font-size:13px;font-weight:700;}
+          .hd2{font-size:9.5px;font-family:var(--mono);}
+          .life{stroke:#c9ccd1;stroke-width:1.2;stroke-dasharray:4 4;}
+          .msg{stroke:#6b7280;stroke-width:1.4;}
+          .ml{paint-order:stroke;stroke:#ffffff;stroke-width:6px;stroke-linejoin:round;font-size:12px;fill:#333a42;}
+          .ml .m{font-family:var(--mono);font-size:11px;fill:#1f252c;font-weight:700;}
+          .ml .d{fill:#7a818b;font-size:11px;}
+          .num{font-family:var(--mono);font-size:10px;fill:#9aa0a8;}
+        </style>
+
+        <!-- lifelines -->
+        <line class="life" x1="90" y1="66" x2="90" y2="626"/>
+        <line class="life" x1="305" y1="66" x2="305" y2="626"/>
+        <line class="life" x1="520" y1="66" x2="520" y2="626"/>
+        <line class="life" x1="735" y1="66" x2="735" y2="626"/>
+        <line class="life" x1="950" y1="66" x2="950" y2="626"/>
+
+        <!-- heads -->
+        <g>
+          <rect x="16" y="18" width="148" height="46" rx="6" fill="#EEF2F8" stroke="#4F6B9A" stroke-width="1.5"/>
+          <text class="hd" x="90" y="38" text-anchor="middle" fill="#4F6B9A">买方 Agent</text>
+          <text class="hd2" x="90" y="54" text-anchor="middle" fill="#5F6670">Buyer Agent</text>
+
+          <rect x="231" y="18" width="148" height="46" rx="6" fill="#EFF0ED" stroke="#5B616B" stroke-width="1.5"/>
+          <text class="hd" x="305" y="38" text-anchor="middle" fill="#5B616B">注册中心</text>
+          <text class="hd2" x="305" y="54" text-anchor="middle" fill="#5F6670">Registry / Discovery</text>
+
+          <rect x="446" y="18" width="148" height="46" rx="6" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+          <text class="hd" x="520" y="38" text-anchor="middle" fill="#2F7D74">卖方 Agent A</text>
+          <text class="hd2" x="520" y="54" text-anchor="middle" fill="#5F6670">Supplier Agent A</text>
+
+          <rect x="661" y="18" width="148" height="46" rx="6" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+          <text class="hd" x="735" y="38" text-anchor="middle" fill="#2F7D74">卖方 Agent B</text>
+          <text class="hd2" x="735" y="54" text-anchor="middle" fill="#5F6670">Supplier Agent B</text>
+
+          <rect x="876" y="18" width="148" height="46" rx="6" fill="#F8F1E5" stroke="#9A6A2F" stroke-width="1.5"/>
+          <text class="hd" x="950" y="38" text-anchor="middle" fill="#9A6A2F">人工审批</text>
+          <text class="hd2" x="950" y="54" text-anchor="middle" fill="#5F6670">Approver · HITL</text>
+        </g>
+
+        <!-- 1 discover -->
+        <line class="msg" x1="90" y1="100" x2="297" y2="100" marker-end="url(#sqArr)"/>
+        <text class="ml" x="193" y="93" text-anchor="middle"><tspan class="num">1 </tspan><tspan class="m">GET agent.json</tspan></text>
+        <!-- 2 cards -->
+        <line class="msg" x1="305" y1="138" x2="98" y2="138" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="201" y="131" text-anchor="middle"><tspan class="num">2 </tspan><tspan class="d">返回 Agent Cards：端点 · 技能 · 认证方式</tspan></text>
+        <!-- 3 send A -->
+        <line class="msg" x1="90" y1="176" x2="512" y2="176" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="169" text-anchor="middle"><tspan class="num">3 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · 提交 RFQ（Data Part）</tspan></text>
+        <!-- 4 fan-out B -->
+        <line class="msg" x1="90" y1="214" x2="727" y2="214" marker-end="url(#sqArr)"/>
+        <text class="ml" x="408" y="207" text-anchor="middle"><tspan class="num">4 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · Fan-out 询价（密封）</tspan></text>
+        <!-- 5 sse status -->
+        <line class="msg" x1="520" y1="252" x2="98" y2="252" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="245" text-anchor="middle"><tspan class="num">5 </tspan><tspan class="m">SSE</tspan><tspan class="d"> submitted → working（进度流）</tspan></text>
+        <!-- 6 self MCP -->
+        <path class="msg" d="M520,282 h66 v20 h-58" fill="none" marker-end="url(#sqArr)"/>
+        <text class="ml" x="596" y="296"><tspan class="num">6 </tspan><tspan class="m">MCP 工具</tspan><tspan class="d"> 库存 / 产能 / 成本 / 定价（私有域内）</tspan></text>
+        <!-- 7 push to approver -->
+        <line class="msg" x1="520" y1="332" x2="942" y2="332" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="731" y="325" text-anchor="middle"><tspan class="num">7 </tspan><tspan class="m">pushNotification</tspan><tspan class="d"> 超权限报价待批</tspan></text>
+        <!-- 8 approve -->
+        <line class="msg" x1="950" y1="370" x2="528" y2="370" marker-end="url(#sqArr)"/>
+        <text class="ml" x="739" y="363" text-anchor="middle"><tspan class="num">8 </tspan><tspan class="d">HITL 批准 / 否决（带审批留痕）</tspan></text>
+        <!-- 9 quote v1 -->
+        <line class="msg" x1="520" y1="408" x2="98" y2="408" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="401" text-anchor="middle"><tspan class="num">9 </tspan><tspan class="m">completed + Artifact</tspan><tspan class="d"> · Quote v1</tspan></text>
+        <!-- 10 counter -->
+        <line class="msg" x1="90" y1="446" x2="512" y2="446" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="439" text-anchor="middle"><tspan class="num">10 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · 还价（input-required 循环）</tspan></text>
+        <!-- 11 quote v2 -->
+        <line class="msg" x1="520" y1="484" x2="98" y2="484" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="477" text-anchor="middle"><tspan class="num">11 </tspan><tspan class="m">completed + Artifact</tspan><tspan class="d"> · Quote v2（版本化）</tspan></text>
+        <!-- 12 cancel B -->
+        <line class="msg" x1="90" y1="522" x2="727" y2="522" marker-end="url(#sqArr)"/>
+        <text class="ml" x="408" y="515" text-anchor="middle"><tspan class="num">12 </tspan><tspan class="m">tasks/cancel</tspan><tspan class="d"> · 终止 B 的任务（未中标）</tspan></text>
+        <!-- 13 award -->
+        <line class="msg" x1="90" y1="560" x2="512" y2="560" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="553" text-anchor="middle"><tspan class="num">13 </tspan><tspan class="m">Award 授标</tspan><tspan class="d"> · PO 意向（Artifact 承载）</tspan></text>
+        <!-- 14 confirmed -->
+        <line class="msg" x1="520" y1="598" x2="98" y2="598" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="591" text-anchor="middle"><tspan class="num">14 </tspan><tspan class="m">confirmed</tspan><tspan class="d"> · 接单锁价，转履约</tspan></text>
+
+        <!-- end bar -->
+        <rect x="90" y="632" width="860" height="32" rx="6" fill="#EAF1EC" stroke="#35705A" stroke-width="1.2"/>
+        <text x="520" y="652" text-anchor="middle" font-size="12.5px" fill="#35705A" font-weight="700">成交：锁价并生成合同 / 采购订单 → 履约 · 验收 · 发票 · 结算（Phase 4）</text>
+      </svg>
+      </div>
+    </div>
+    <div class="legend" style="margin-top:6px;">
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#6b7280" stroke-width="1.6"/></svg> 请求 / 调用（message/send、cancel、Award）</span>
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#6b7280" stroke-width="1.6" stroke-dasharray="5 3"/></svg> 响应 / 异步通知（SSE、Artifact、推送）</span>
+    </div>
+    <div class="note">长耗时的定价与审批一律<b>异步化</b>：调用方通过 <code>message/stream</code> 订阅 SSE，或先用 <code>tasks/pushNotificationConfig/set</code> 注册 Webhook，由卖方在报价就绪 / 待审批时主动推送，避免长连接阻塞；每次请求携带<b>幂等键</b>，重试不会产生重复报价或重复授标。</div>
+  </div>
+</section>
+
+<section id="state">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">06</span><h2>报价任务状态机</h2></div>
+    <p class="sec-lead">一次报价任务从草稿到结算归档的完整状态与迁移条件。竞争阶段的报价在截止前处于<b>密封态</b>；超权限报价进入<b>人工审批旁支</b>；过期、撤回、取消、失败、未中标汇入异常终态；成交后沿履约链推进，履约失败触发 <b>Saga 补偿</b>顺延次优中标人。</p>
+    <div class="sheet" style="padding:16px;">
+      <div style="overflow-x:auto;">
+      <svg viewBox="0 0 1040 508" width="100%" style="min-width:860px;height:auto;" role="img" aria-label="报价任务状态机">
+        <defs>
+          <marker id="stG" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#6b7280"/></marker>
+          <marker id="stR" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#A14E50"/></marker>
+          <marker id="stA" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#9A6A2F"/></marker>
+        </defs>
+        <style>
+          .st{fill:#FCFCFB;stroke:#C4C8CD;stroke-width:1.3;}
+          .stt{font-size:13px;font-weight:700;fill:#1A1B1C;}
+          .ste{font-size:9.5px;font-family:var(--mono);fill:#8A8F98;}
+          .ap{fill:#F8F1E5;stroke:#9A6A2F;stroke-width:1.4;} .apt{font-size:13px;font-weight:700;fill:#7A5520;}
+          .wd{fill:#EAF1EC;stroke:#35705A;stroke-width:1.4;} .wdt{font-size:13px;font-weight:700;fill:#2C5E4B;}
+          .cl{fill:#EFF0ED;stroke:#5B616B;stroke-width:1.4;} .clt{font-size:13px;font-weight:700;fill:#3f454d;}
+          .tr{stroke:#6b7280;stroke-width:1.4;fill:none;}
+          .tl{font-size:11px;fill:#5F6670;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round;}
+          .bad{stroke:#A14E50;stroke-width:1.3;stroke-dasharray:5 4;fill:none;}
+          .badl{font-size:11px;fill:#A14E50;paint-order:stroke;stroke:#fff;stroke-width:5px;}
+          .cmp{stroke:#9A6A2F;stroke-width:1.3;stroke-dasharray:6 4;fill:none;}
+          .cmpl{font-size:11.5px;fill:#9A6A2F;paint-order:stroke;stroke:#fff;stroke-width:5px;}
+          .chip{fill:#fff;stroke:#E2B9BA;stroke-width:1.1;} .chipt{font-size:11px;fill:#8A3F41;}
+        </style>
+
+        <!-- row 1 -->
+        <g>
+          <rect class="st" x="45" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="110" y="83" text-anchor="middle">草稿</text><text class="ste" x="110" y="99" text-anchor="middle">Draft</text>
+          <rect class="st" x="225" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="290" y="83" text-anchor="middle">已分发</text><text class="ste" x="290" y="99" text-anchor="middle">Dispatched</text>
+          <rect class="st" x="405" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="470" y="83" text-anchor="middle">报价编制中</text><text class="ste" x="470" y="99" text-anchor="middle">working · 可澄清</text>
+          <rect class="ap" x="580" y="61" width="160" height="50" rx="7"/>
+          <text class="apt" x="660" y="83" text-anchor="middle">待人工审批</text><text class="ste" x="660" y="99" text-anchor="middle">input-required · HITL</text>
+        </g>
+        <!-- row1 arrows -->
+        <path class="tr" d="M175,86 H225" marker-end="url(#stG)"/><text class="tl" x="200" y="80" text-anchor="middle">分发询价</text>
+        <path class="tr" d="M355,86 H405" marker-end="url(#stG)"/><text class="tl" x="380" y="80" text-anchor="middle">卖方受理</text>
+        <path class="tr" d="M535,86 H580" marker-end="url(#stG)"/><text class="tl" x="557" y="80" text-anchor="middle">超权限</text>
+        <!-- approval reject loop back -->
+        <path class="tr" d="M600,61 C600,28 470,28 470,61" marker-end="url(#stG)"/>
+        <text class="tl" x="535" y="24" text-anchor="middle">否决 / 补正</text>
+
+        <!-- row 2 -->
+        <g>
+          <rect class="ap" x="580" y="201" width="160" height="50" rx="7"/>
+          <text class="apt" x="660" y="221" text-anchor="middle">已提交 · 密封</text><text class="ste" x="660" y="238" text-anchor="middle">Submitted · Sealed</text>
+          <rect class="st" x="405" y="201" width="130" height="50" rx="7"/>
+          <text class="stt" x="470" y="223" text-anchor="middle">评估中</text><text class="ste" x="470" y="239" text-anchor="middle">Under Evaluation</text>
+          <rect class="wd" x="225" y="201" width="130" height="50" rx="7"/>
+          <text class="wdt" x="290" y="223" text-anchor="middle">已授标</text><text class="ste" x="290" y="239" text-anchor="middle">Awarded</text>
+        </g>
+        <!-- into submitted -->
+        <path class="tr" d="M660,111 V201" marker-end="url(#stG)"/><text class="tl" x="700" y="160">批准提交</text>
+        <path class="tr" d="M470,111 V156 H620 V201" marker-end="url(#stG)"/><text class="tl" x="500" y="151">权限内直接提交</text>
+        <!-- row2 leftward -->
+        <path class="tr" d="M580,226 H535" marker-end="url(#stG)"/><text class="tl" x="557" y="220" text-anchor="middle">截止开标</text>
+        <path class="tr" d="M405,226 H355" marker-end="url(#stG)"/><text class="tl" x="380" y="220" text-anchor="middle">授标 · 大额人审</text>
+
+        <!-- row 3 fulfillment -->
+        <g>
+          <rect class="st" x="51" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="110" y="369" text-anchor="middle">订单已发</text><text class="ste" x="110" y="385" text-anchor="middle">PO Issued</text>
+          <rect class="st" x="187" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="246" y="369" text-anchor="middle">已确认</text><text class="ste" x="246" y="385" text-anchor="middle">Confirmed</text>
+          <rect class="st" x="323" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="382" y="369" text-anchor="middle">履约中</text><text class="ste" x="382" y="385" text-anchor="middle">Fulfillment</text>
+          <rect class="st" x="459" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="518" y="369" text-anchor="middle">已交付验收</text><text class="ste" x="518" y="385" text-anchor="middle">Delivered</text>
+          <rect class="st" x="595" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="654" y="369" text-anchor="middle">已开票</text><text class="ste" x="654" y="385" text-anchor="middle">Invoiced</text>
+          <rect class="st" x="731" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="790" y="369" text-anchor="middle">已结算</text><text class="ste" x="790" y="385" text-anchor="middle">Settled</text>
+          <rect class="cl" x="867" y="347" width="118" height="50" rx="7"/>
+          <text class="clt" x="926" y="369" text-anchor="middle">已关闭</text><text class="ste" x="926" y="385" text-anchor="middle">Closed</text>
+        </g>
+        <!-- awarded to PO -->
+        <path class="tr" d="M290,251 V322 H110 V347" marker-end="url(#stG)"/>
+        <text class="tl" x="205" y="317" text-anchor="middle">生成合同 / PO · 锁价</text>
+        <!-- fulfillment arrows -->
+        <path class="tr" d="M169,372 H187" marker-end="url(#stG)"/>
+        <path class="tr" d="M305,372 H323" marker-end="url(#stG)"/>
+        <path class="tr" d="M441,372 H459" marker-end="url(#stG)"/>
+        <path class="tr" d="M577,372 H595" marker-end="url(#stG)"/>
+        <path class="tr" d="M713,372 H731" marker-end="url(#stG)"/>
+        <path class="tr" d="M849,372 H867" marker-end="url(#stG)"/>
+
+        <!-- exception pool -->
+        <rect x="790" y="56" width="222" height="224" rx="8" fill="#FCF7F7" stroke="#A14E50" stroke-width="1.3" stroke-dasharray="5 4"/>
+        <text x="901" y="80" text-anchor="middle" font-size="12.5" font-weight="700" fill="#A14E50">异常 / 终止态（归档关闭）</text>
+        <rect class="chip" x="802" y="92" width="198" height="28" rx="4"/><text class="chipt" x="901" y="110" text-anchor="middle">Expired · 报价过有效期 / 流拍</text>
+        <rect class="chip" x="802" y="128" width="198" height="28" rx="4"/><text class="chipt" x="901" y="146" text-anchor="middle">Withdrawn · 卖方撤回 / 放弃</text>
+        <rect class="chip" x="802" y="164" width="198" height="28" rx="4"/><text class="chipt" x="901" y="182" text-anchor="middle">Cancelled · 买方取消</text>
+        <rect class="chip" x="802" y="200" width="198" height="28" rx="4"/><text class="chipt" x="901" y="218" text-anchor="middle">Failed · 校验 / 系统失败</text>
+        <rect class="chip" x="802" y="236" width="198" height="28" rx="4"/><text class="chipt" x="901" y="254" text-anchor="middle">Rejected · 未中标</text>
+
+        <!-- exception flows -->
+        <path class="bad" d="M470,111 V176 H790 V110" marker-end="url(#stR)"/>
+        <text class="badl" x="610" y="171" text-anchor="middle">过期 / 撤回 / 取消 / 失败</text>
+        <path class="bad" d="M470,251 V304 H790 V250" marker-end="url(#stR)"/>
+        <text class="badl" x="620" y="299" text-anchor="middle">未中标</text>
+
+        <!-- saga compensation -->
+        <path class="cmp" d="M382,397 V462 H314 V255" marker-end="url(#stA)"/>
+        <text class="cmpl" x="560" y="486" text-anchor="middle">履约失败：Saga 补偿 → 顺延次优中标人 / 重新询价</text>
+      </svg>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:#fff;border:1.3px solid #C4C8CD;"></i>进行态</span>
+      <span><i class="sw gov"></i>人工审批 / 密封</span>
+      <span><i class="sw" style="background:#35705A;"></i>成交 / 履约</span>
+      <span><i class="sw" style="background:#A14E50;"></i>异常终止</span>
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#9A6A2F" stroke-width="1.6" stroke-dasharray="6 4"/></svg> 补偿回流</span>
+    </div>
+    <div class="note">状态持久化在 A2A Task 与交易服务库中，<b>每次迁移都是带幂等键的事件</b>，写入只追加的事件日志（Event Sourcing 思路），因此任意任务可断点续跑、可重放、可审计；密封态报价对买卖双方与平台均不可见，直至「截止开标」迁移触发阈值解密。</div>
+  </div>
+</section>
+
+<section id="engine">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">07</span><h2>智能报价引擎</h2></div>
+    <p class="sec-lead">报价引擎是卖方 Agent 的决策核心，采用「输入 → 确定性决策流水线 → 结构化产出」。<b>价格由规则与模型计算、由护栏约束，LLM 被限定在理解与协商层、不掌握最终定价权</b>，从而兼顾灵活性与可控、可审计。</p>
+    <div class="sheet" style="padding:18px;">
+      <div class="ipo">
+        <div class="col in">
+          <h4><span class="dom buyer">输入</span> 决策依据</h4>
+          <ul>
+            <li><b>RFQ 要素</b>：规格 / 数量阶梯 / 交期 / 交货地 / 贸易条款</li>
+            <li><b>成本数据</b>：BOM、原料、人工、物流、税费（经 MCP）</li>
+            <li><b>可供给能力</b>：库存、ATP 可承诺量、CTP 产能（经 MCP）</li>
+            <li><b>商务上下文</b>：客户等级、授信额度、账期、历史成交价</li>
+            <li><b>市场信号</b>：行情、汇率、竞争态势、需求弹性</li>
+            <li><b>授权边界</b>：底价、目标毛利、折扣权限矩阵</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h4>确定性定价决策流水线</h4>
+          <ul>
+            <li><b>1 · 资格与可交付校验</b>：是否在营品类、ATP/CTP、最小起订量、交期可行性</li>
+            <li><b>2 · 成本核算</b>：生成成本拆解（含税 / 到岸 / 总拥有成本）</li>
+            <li><b>3 · 定价策略</b>：成本加成 / 价值定价 / 竞争定价 / 动态定价，支持数量阶梯、捆绑、账期组合</li>
+            <li><b>4 · 约束求解与护栏</b>：底价 floor、目标毛利、权限矩阵、有效期锁价、倾销 / 管制价 / 价格歧视合规</li>
+            <li><b>5 · 多目标权衡</b>：在毛利 × 中标率 × 产能利用 × 风险间求可行最优</li>
+            <li><b>6 · 审批路由</b>：按权限矩阵决定自动发出或升级 HITL</li>
+          </ul>
+          <div class="llm-box">
+            <div class="t">LLM 的边界（仅协商层，不直接定价）</div>
+            <p>负责非结构化 RFQ / 图纸解析、澄清问答、谈判话术与让步节奏、生成可解释说明；<b>只能在第 4 步给定的可行价格区间内协商</b>。任何越界、低于成本红线或命中合规规则的请求一律拦截并转人工。</p>
+          </div>
+        </div>
+        <div class="col out">
+          <h4><span class="dom seller">输出</span> 结构化报价</h4>
+          <ul>
+            <li><b>Quote 主体</b>：单价 / 阶梯价 / 总价 / 币种 / 税费 / 贸易条款 / 交期 / 有效期</li>
+            <li><b>定价依据</b>：成本拆解与定价理由（可解释、可审计）</li>
+            <li><b>置信度</b>：中标概率与价格弹性估计</li>
+            <li><b>还价预案</b>：让步节奏与底线（底价永不出域）</li>
+            <li><b>审批结论</b>：自动通过 / 转人工及原因</li>
+            <li><b>A2A Artifact</b>：签名、版本化的报价制品</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="note gov"><b>为什么不让 LLM 直接报价？</b>价格错误是直接、可量化且难以追回的资金损失，且 LLM 输出不具确定性、易受谈判话术诱导。把定价收敛为「规则 / 优化模型求解可行域 + 护栏硬约束」，LLM 在可行域内负责语言层协商，既保留自然交互体验，又使每一笔报价都<b>可复算、可解释、可追责</b>。</div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">08</span><h2>信任、安全与治理</h2></div>
+    <p class="sec-lead">跨组织自动交易的前提是「<b>可证明的公平、可控的自治、可追溯的责任</b>」。信任不依赖于对某一方的善意假设，而由身份、加密、风控、权限边界与审计共同保证。</p>
+
+    <div class="grid3" style="margin-top:18px;">
+      <div class="actor gov"><div class="role">IDENTITY</div><h4>强身份与最小授权</h4><p>Agent Card 绑定所属组织的 DID / mTLS 证书；OAuth2 / OIDC 颁发受限 Scope；每条消息签名并带 nonce / 时间戳防重放，Agent 行为可归责到组织。</p></div>
+      <div class="actor gov"><div class="role">FAIRNESS</div><h4>密封报价与公平开标</h4><p>截止前报价以公钥加密或在 TEE 内密封，买方、卖方、平台均不可见；引入可信时间戳，到达截止时间才阈值解密 / 开标，杜绝提前泄密与暗箱改价。</p></div>
+      <div class="actor gov"><div class="role">ANTI-FRAUD</div><h4>风控与反围标串标</h4><p>检测报价雷同、关联关系、IP / 账号聚集、异常低价或陪标模式，构建供应商关联图谱；命中围标特征即冻结授标并转合规调查。</p></div>
+      <div class="actor gov"><div class="role">AUTONOMY BOUNDARY</div><h4>自治边界与人在回路</h4><p>按金额、折扣幅度、异常度、供应商新旧、条款偏离度配置权限矩阵；规则内自动执行，越界自动升级，红线动作直接禁止。</p></div>
+      <div class="actor gov"><div class="role">CONFIDENTIALITY</div><h4>商业机密与数据最小化</h4><p>成本、底价、产能、客户名单等留在各自私有域，定价在本地完成；跨域只交换经授权的 RFQ / Quote 与必要凭证，遵循数据最小化与数据主权要求。</p></div>
+      <div class="actor gov"><div class="role">AUDITABILITY</div><h4>全链路审计与可解释</h4><p>询价、报价、还价、定价依据、审批、开标、授标全部写入只追加、哈希链校验的审计日志，可重放、可举证、可接受监管核查。</p></div>
+    </div>
+
+    <h4 style="margin:30px 0 4px;font-size:16px;">人在回路（HITL）自治权限矩阵 <span style="font-size:12.5px;color:var(--ink3);font-weight:400;">· 阈值由各企业策略配置，下表为策略框架示意</span></h4>
+    <div class="tbl-wrap">
+      <table class="matrix">
+        <colgroup><col style="width:23%"><col style="width:25%"><col style="width:26%"><col style="width:26%"></colgroup>
+        <thead><tr><th>决策场景</th><th>低风险（小额 / 老供应商 / 标准品）</th><th>中风险</th><th>高风险（大额 / 新供应商 / 异常）</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="lvl">受理询价 · 资格</td>
+            <td><span class="tag-auto">自动</span> 凭证有效即受理</td>
+            <td><span class="tag-auto">自动</span> 附加资质 / 授信核验</td>
+            <td><span class="tag-hitl">人审</span> 资质材料人工确认</td>
+          </tr>
+          <tr>
+            <td class="lvl">报价金额</td>
+            <td><span class="tag-auto">自动</span> 低于阈值 A</td>
+            <td><span class="tag-hitl">主管审批</span> 阈值 A–B</td>
+            <td><span class="tag-hitl">多级 / 委员会</span> 高于阈值 B</td>
+          </tr>
+          <tr>
+            <td class="lvl">折扣 / 让步幅度</td>
+            <td><span class="tag-auto">自动</span> 授权区间内</td>
+            <td><span class="tag-hitl">审批</span> 下探一档折扣</td>
+            <td><span class="tag-deny">禁止</span> 突破成本底价 / 异常低价</td>
+          </tr>
+          <tr>
+            <td class="lvl">还价（counter-offer）</td>
+            <td><span class="tag-auto">自动</span> 谈判策略区间内</td>
+            <td><span class="tag-hitl">审批</span> 逼近底价</td>
+            <td><span class="tag-deny">禁止自动</span> 突破底价，须人工</td>
+          </tr>
+          <tr>
+            <td class="lvl">授标 Award</td>
+            <td><span class="tag-auto">自动</span> 规则唯一最优</td>
+            <td><span class="tag-hitl">人审</span> 大额 / 并列 / 分歧</td>
+            <td><span class="tag-hitl">多级 + 合规</span> 巨额 / 单一来源 / 关联交易</td>
+          </tr>
+          <tr>
+            <td class="lvl">合同条款偏离</td>
+            <td><span class="tag-auto">自动</span> 标准模板条款</td>
+            <td><span class="tag-hitl">审批</span> 非核心条款偏离</td>
+            <td><span class="tag-hitl">法务审批</span> 违约责任 / 合规等核心条款</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note gov"><b>密封开标的实现要点：</b>买方公钥（或 TEE 公钥）加密每份报价，平台仅保存密文与可信时间戳；到达 RFQ 约定截止时间后，密钥按阈值方案（如多方门限签名 / TEE 远程证明）才可用，<b>任何单方都无法在截止前单独解密</b>；开标动作与参与方签名一并上链 / 入哈希链日志，保证「报价未被篡改、开标未被提前」可被各方独立验证。</div>
+  </div>
+</section>
+
+<section id="reliability">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">09</span><h2>可靠性与跨组织一致性</h2></div>
+    <p class="sec-lead">报价是跨企业、长耗时、可能失败的分布式事务，且涉及资金承诺。系统不追求跨组织强一致的分布式锁，而以<b>「幂等 + 异步 + 最终一致 + 补偿 + 对账」</b>组合保证正确性与可恢复性。</p>
+    <div class="grid3" style="margin-top:18px;">
+      <div class="rel"><span class="pat">PATTERN · IDEMPOTENCY</span><h4>幂等键去重</h4><p>每个询价、报价、授标请求携带 Idempotency-Key，服务端持久化去重；网络抖动重试、SSE 重连不会产生重复报价或重复授标。</p></div>
+      <div class="rel"><span class="pat">PATTERN · ASYNC + TIMEOUT</span><h4>异步优先与超时降级</h4><p>定价、审批等长操作走 SSE / Webhook 异步回传并约定 SLA；供应方不可达即熔断跳过并告知，定价服务异常回退规则价或转人工。</p></div>
+      <div class="rel"><span class="pat">PATTERN · OUTBOX / INBOX</span><h4>事务消息最终一致</h4><p>跨组织消息先写本地 Outbox 再投递，接收方 Inbox 去重确认；「至少一次投递 + 幂等消费」实现跨域最终一致，不依赖双方同时在线。</p></div>
+      <div class="rel"><span class="pat">PATTERN · SAGA</span><h4>补偿而非长事务</h4><p>授标后首选方履约失败，按预案顺延次优中标人或重新询价；订单到履约每一步都定义对应补偿动作，失败可回退到一致状态。</p></div>
+      <div class="rel"><span class="pat">PATTERN · PRICE LOCK</span><h4>有效期与锁价</h4><p>报价带有效期，过期自动流拍 / 流单；中标后在有效期内锁价并预留库存 / 汇率，后续市场价波动不影响已确认订单。</p></div>
+      <div class="rel"><span class="pat">PATTERN · RECONCILE</span><h4>对账与可重放</h4><p>报价—订单—发票—付款四方定时对账，差异自动告警；事件日志支持任意任务断点续跑与全程重放，用于纠错与纠纷举证。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="deployment">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">10</span><h2>联邦部署架构</h2></div>
+    <p class="sec-lead">采用<b>联邦式部署</b>：买卖双方在各自私有云 / 租户内自持 Agent、报价引擎与企业数据；市场运营方仅托管中立的注册发现、撮合开标与审计见证。跨组织只经 A2A 协议网络交换加密签名消息，定价与商业机密始终不出域。</p>
+    <div class="sheet" style="padding:20px;">
+      <div class="deploy">
+        <div class="org buyer-org">
+          <div class="org-title"><span class="dom buyer">买方组织</span> 私有 VPC / 租户</div>
+          <div class="stack-item">买方 Agent 运行时<small>需求规划 · 评估谈判 · HITL 网关</small></div>
+          <div class="stack-item">交易服务（买方侧）<small>RFQ · 评标授标 · 审批流</small></div>
+          <div class="stack-item">MCP 工具网关<small>ERP · 采购 · 财务 · 预算</small></div>
+          <div class="stack-item">API 网关 · mTLS · KMS / Secret</div>
+        </div>
+        <div class="mid-col">
+          <div class="mid-node">A2A 协议网络<small>JSON-RPC · SSE · Webhook</small></div>
+          <div class="link-label">mTLS · 消息签名<br>幂等 · 加密</div>
+          <div class="mid-node">注册发现 Registry<small>Agent Card · 资质 · 信誉</small></div>
+          <div class="mid-node">中立撮合 / 密封开标<small>TEE · 可信时间戳 · 审计见证</small></div>
+        </div>
+        <div class="org seller-org">
+          <div class="org-title"><span class="dom seller">卖方组织 ×N</span> 私有 VPC / 租户</div>
+          <div class="stack-item">卖方 Agent 运行时<small>受理 · 报价 · 谈判 · HITL 网关</small></div>
+          <div class="stack-item">报价引擎 / 定价策略<small>底价 · 成本 · 护栏（不出域）</small></div>
+          <div class="stack-item">MCP 工具网关<small>WMS 库存 · APS 产能 · 成本</small></div>
+          <div class="stack-item">API 网关 · mTLS · KMS / Secret</div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>连接与网络策略：</b>优先<b>出站连接</b>——供应方可不开放入站端口，通过主动拉取任务或向平台注册 Webhook 接收回调，缩小攻击面；市场方多区域部署保障可用性，开标 TEE / 门限解密服务独立运维并接受各方远程证明；各组织内部用 Service Mesh、KMS 与最小权限 Secret 管理，跨域默认双向 TLS + 逐条消息签名。</div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">11</span><h2>技术选型参考</h2></div>
+    <p class="sec-lead">下表按能力层给出<b>可替换的中立参考</b>，不绑定单一厂商。落地原则：协议层坚持开放标准（A2A / MCP / JSON Schema），业务与定价能力自研可控，基础设施尽量复用企业现有技术栈。</p>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup><col style="width:19%"><col style="width:35%"><col style="width:46%"></colgroup>
+        <thead><tr><th>能力层</th><th>关键要求</th><th>参考技术 / 方案（均可替换）</th></tr></thead>
+        <tbody>
+          <tr><td>Agent 编排</td><td>有状态多步规划、工具调用、HITL、状态可持久化</td><td>LangGraph / AutoGen / Google ADK，或基于状态机自研编排内核</td></tr>
+          <tr><td>Agent 间协议</td><td>开放互操作、任务生命周期、流式与异步推送</td><td><b>A2A（Agent2Agent）</b> + 官方多语言 SDK</td></tr>
+          <tr><td>工具 / 数据接入</td><td>统一连接企业系统、可鉴权、可限流、可审计</td><td><b>MCP</b>（Model Context Protocol）Server / 工具网关</td></tr>
+          <tr><td>数据契约</td><td>RFQ / Quote 结构化、可校验、可版本化</td><td>JSON Schema / OpenAPI；与 EDI、OAGIS 等行业标准做映射</td></tr>
+          <tr><td>LLM 接入</td><td>多模型路由、限流、缓存、成本与 Token 审计</td><td>LLM 网关（LiteLLM 类 / 自研），按任务复杂度分级选模型</td></tr>
+          <tr><td>业务服务</td><td>交易逻辑、微服务、接口</td><td>Java / Go / Python + gRPC / REST</td></tr>
+          <tr><td>规则与授权</td><td>资格、定价权限、合规判定与策略外置</td><td>规则引擎 Drools / 策略引擎 OPA（Rego）</td></tr>
+          <tr><td>长事务 / 工作流</td><td>Saga、HITL 审批、超时与补偿、可重放</td><td>Temporal / Camunda（持久化工作流）</td></tr>
+          <tr><td>消息与事件</td><td>事件驱动、Outbox / Inbox、削峰</td><td>Apache Kafka / RabbitMQ</td></tr>
+          <tr><td>存储与记忆</td><td>报价 / 任务 / 审计持久化、语义检索</td><td>PostgreSQL、对象存储、向量库（pgvector / Milvus）</td></tr>
+          <tr><td>安全</td><td>身份、密钥、电子签章、机密计算</td><td>Keycloak / OAuth2、Vault / KMS、CA 电子签章、TEE（密封开标，可选）</td></tr>
+          <tr><td>可观测</td><td>跨 Agent 链路追踪、指标、重放</td><td>OpenTelemetry（透传 traceparent）+ Prometheus / Grafana</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">12</span><h2>分阶段落地路线</h2></div>
+    <p class="sec-lead">建议沿「先打通、再比价、后自治、终可信」的顺序增量交付，每个里程碑都以可运行、可验证的闭环收尾，自治程度随信任与数据积累逐步放开。</p>
+    <div class="sheet" style="padding:26px 22px 20px;">
+      <div class="road">
+        <div class="mile">
+          <div class="m-time">M1 · 0–2 月</div>
+          <div class="rail"></div>
+          <h4>点对点打通</h4>
+          <p>单买方—单卖方 A2A 询价 / 报价；结构化 RFQ / Quote；规则定价；全量人工审；MCP 打通库存查询。</p>
+        </div>
+        <div class="mile">
+          <div class="m-time">M2 · 2–4 月</div>
+          <div class="rail"></div>
+          <h4>多供应商比价</h4>
+          <p>Fan-out 询价、多属性 TCO 评分、版本化议价；接入 ERP / 财务；幂等键与 Outbox 落地。</p>
+        </div>
+        <div class="mile">
+          <div class="m-time">M3 · 4–6 月</div>
+          <div class="rail"></div>
+          <h4>自治与竞价</h4>
+          <p>Registry 自助发现、动态定价、HITL 权限矩阵、反向拍卖；完整审计日志与指标看板。</p>
+        </div>
+        <div class="mile">
+          <div class="m-time">M4 · 6–9 月</div>
+          <div class="rail"></div>
+          <h4>可信闭环</h4>
+          <p>密封投标 / TEE 开标、风控反围标、合同—订单—结算闭环、四方对账与 Saga 补偿。</p>
+        </div>
+        <div class="mile">
+          <div class="m-time">M5 · 9–12 月</div>
+          <div class="rail"></div>
+          <h4>规模与联邦</h4>
+          <p>跨行业 / 多市场联邦、供应商信誉体系、价格学习优化、SLA 与容灾、规模化推广。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="risk">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">13</span><h2>关键风险与对策</h2></div>
+    <p class="sec-lead">围绕「资金安全、公平竞争、越权自治、跨域可靠、合规追责」五类核心风险给出内建对策，相关控制点已在架构与状态机中落地，而非事后补丁。</p>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup><col style="width:25%"><col style="width:25%"><col style="width:50%"></colgroup>
+        <thead><tr><th>风险</th><th>影响</th><th>缓解对策</th></tr></thead>
+        <tbody>
+          <tr><td>LLM 幻觉 / 被谈判话术诱导报错价</td><td>直接资金损失</td><td>LLM 不掌握定价权；规则 / 模型计算可行价并设底价，LLM 仅在区间内协商；护栏实时校验，越界即拦截转人工。</td></tr>
+          <tr><td>报价提前泄密、围标串标</td><td>竞争公平受损、法律风险</td><td>公钥加密 / TEE 密封 + 可信时间戳 + 截止阈值解密；关联关系图谱与报价雷同、陪标模式检测；异常即冻结授标。</td></tr>
+          <tr><td>Agent 越权自动成交</td><td>大额损失、合规事故</td><td>HITL 权限矩阵按金额 / 折扣 / 异常度 / 供应商新旧分级；红线动作禁止自动执行；大额多级审批并留痕。</td></tr>
+          <tr><td>跨组织消息丢失 / 重复 / 乱序</td><td>重复报价、错单漏单</td><td>幂等键去重、Outbox / Inbox 事务消息、状态机约束迁移、定时四方对账与任务重放。</td></tr>
+          <tr><td>身份伪造、事后抵赖</td><td>冒名报价、纠纷难举证</td><td>mTLS / DID / 可验证凭证绑定组织与 Agent；逐条消息签名 + nonce 防重放；哈希链审计日志。</td></tr>
+          <tr><td>成本 / 底价等商业机密泄露</td><td>议价能力丧失</td><td>定价在本地完成、敏感数据不出域；跨域只交换授权后的 RFQ / Quote；字段级授权与数据最小化，必要时 TEE 计算。</td></tr>
+          <tr><td>异构系统难以互通</td><td>对接成本高、网络效应弱</td><td>坚持开放 A2A + JSON Schema 契约；协议适配层兼容 EDI / REST；Agent Card 能力发现实现自助接入。</td></tr>
+          <tr><td>供应方 Agent 故障 / 竞价高峰</td><td>流拍、交期延误</td><td>熔断跳过不可达方、超时降级转人工、备选供应商池；高峰排队与可信时间戳保证截止排序公平；SLA 监控。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="contract">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">14</span><h2>协议分工与数据契约</h2></div>
+    <p class="sec-lead">A2A 与 MCP 在系统中正交分工；跨组织交换的 RFQ / Quote 以严格 Schema 定义为结构化制品（Artifact / Data Part），这是互操作与可校验的基础。</p>
+    <div class="grid2" style="margin-top:16px;">
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom market">跨组织</span> A2A：Agent ↔ Agent</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">负责<b>能力发现</b>（Agent Card）、<b>任务生命周期</b>（Task：submitted / working / input-required / completed / failed / canceled）、<b>消息与制品</b>（Message、Text / File / Data Part、Artifact）、<b>SSE 流式与推送</b>。询价单、报价单、授标通知等业务事务都作为 Artifact / Data Part 在 Task 上下文中传递。</p>
+      </div>
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom seller">组织内</span> MCP：Agent ↔ 工具 / 数据</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">以 Resources / Tools / Prompts 统一连接 ERP、CRM、PIM、WMS、APS、财务与定价库，在<b>鉴权、限流、审计</b>前提下完成数据读写与函数调用。MCP 调用发生在各组织私有域内，<b>不跨组织暴露</b>，从而保护商业机密。</p>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:16px;">
+      <div class="sheet" style="margin:0;padding:16px;">
+        <h4>Agent Card（能力发现，示意）</h4>
+<pre class="code"><span class="c">// GET https://agent.supplier-a.example/.well-known/agent.json</span>
+{
+  <span class="k">"name"</span>: <span class="s">"supplier-a-quoting-agent"</span>,
+  <span class="k">"description"</span>: <span class="s">"承接标准件询价并自动报价"</span>,
+  <span class="k">"url"</span>: <span class="s">"https://agent.supplier-a.example/a2a"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.0.0"</span>,
+  <span class="k">"capabilities"</span>: {
+    <span class="k">"streaming"</span>: <span class="n">true</span>,
+    <span class="k">"pushNotifications"</span>: <span class="n">true</span>
+  },
+  <span class="k">"defaultInputModes"</span>: [<span class="s">"text"</span>, <span class="s">"data"</span>],
+  <span class="k">"skills"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"rfq.quote"</span>, <span class="k">"name"</span>: <span class="s">"RFQ 报价"</span>,
+      <span class="k">"tags"</span>: [<span class="s">"procurement"</span>, <span class="s">"quoting"</span>] }
+  ],
+  <span class="k">"securitySchemes"</span>: { <span class="k">"mTLS"</span>: { <span class="k">"type"</span>: <span class="s">"mtls"</span> } }
+}</pre>
+      </div>
+      <div class="sheet" style="margin:0;padding:16px;">
+        <h4>Quote 报价单（Artifact / Data Part，示意）</h4>
+<pre class="code">{
+  <span class="k">"quoteId"</span>: <span class="s">"Q-2026-0001"</span>,
+  <span class="k">"rfqId"</span>: <span class="s">"RFQ-7788"</span>,
+  <span class="k">"supplierId"</span>: <span class="s">"S-A"</span>,
+  <span class="k">"currency"</span>: <span class="s">"CNY"</span>,
+  <span class="k">"incoterm"</span>: <span class="s">"DDP"</span>,
+  <span class="k">"lines"</span>: [{
+    <span class="k">"sku"</span>: <span class="s">"SKU-1042"</span>, <span class="k">"qty"</span>: <span class="n">1000</span>,
+    <span class="k">"unitPrice"</span>: <span class="n">12.40</span>,
+    <span class="k">"tiered"</span>: [ {<span class="k">"qty"</span>:<span class="n">5000</span>,<span class="k">"price"</span>:<span class="n">11.80</span>} ]
+  }],
+  <span class="k">"totalAmount"</span>: <span class="n">12400</span>,
+  <span class="k">"taxIncluded"</span>: <span class="n">true</span>,
+  <span class="k">"leadTimeDays"</span>: <span class="n">21</span>,
+  <span class="k">"validUntil"</span>: <span class="s">"2026-10-07T18:00:00+08:00"</span>,
+  <span class="k">"paymentTerms"</span>: <span class="s">"NET30"</span>,
+  <span class="k">"version"</span>: <span class="s">"v2"</span>,
+  <span class="k">"confidence"</span>: <span class="n">0.78</span>,
+  <span class="k">"approval"</span>: <span class="s">"auto"</span>,
+  <span class="k">"signature"</span>: <span class="s">"base64:…"</span>
+}</pre>
+      </div>
+    </div>
+    <div class="note">以上 JSON 为<b>契约结构示意</b>，落地时应以 JSON Schema 严格定义字段、必填项、取值范围与版本（含多币种、税费、贸易条款、分批交付、有效期时区等），并在 Agent Card 的 skills / inputModes 中声明可处理的契约版本，实现前向兼容与灰度升级。</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>A2A 自动报价系统架构设计 · v1.0（概念设计 / 示意）</span>
+    <span>协议字段以 A2A 官方规范为准 · 组件为能力划分而非物理部署约束</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  try{
+    var links=document.querySelectorAll('#navlinks a');
+    var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+    var secs=document.querySelectorAll('section[id]');
+    if(!('IntersectionObserver' in window)||!secs.length)return;
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){if(e.isIntersecting){
+        links.forEach(function(a){a.classList.remove('active');});
+        var a=map[e.target.id];if(a){a.classList.add('active');
+          a.scrollIntoView({block:'nearest',inline:'center'});}
+      }});
+    },{rootMargin:'-20% 0px -70% 0px'});
+    secs.forEach(function(s){io.observe(s);});
+  }catch(e){/* no-op: nav remains clickable */}
+})();
+</script>
+</body>
+</html>
