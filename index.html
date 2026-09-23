@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en" style="margin:0;padding:0;">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2A Automated Quoting System · Architecture Design</title>
+<meta name="description" content="Conceptual architecture for an Agent-to-Agent (A2A) automated quoting system: cross-organization RFQ, quoting, negotiation, award and settlement with deterministic pricing, sealed bids and human-in-the-loop controls.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234F6B9A'/%3E%3Ccircle cx='9' cy='16' r='3.2' fill='%23fff'/%3E%3Ccircle cx='23' cy='9' r='3.2' fill='%239FD0C8'/%3E%3Ccircle cx='23' cy='23' r='3.2' fill='%239FD0C8'/%3E%3Cg stroke='%23fff' stroke-width='1.6'%3E%3Cpath d='M11.6 14.6 20.4 10.4'/%3E%3Cpath d='M11.6 17.4 20.4 21.6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,600;6..72,700;6..72,800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#1A1B1C; --ink2:#5F6670; --ink3:#8A8F98;
+  --line:#E4E3DD; --line2:#D7D6CF; --bg:#F7F7F5; --paper:#FFFFFF;
+  --buyer:#4F6B9A; --buyer-bg:#EEF2F8; --buyer-line:#C7D4E6;
+  --seller:#2F7D74; --seller-bg:#E8F2F0; --seller-line:#BFDAD4;
+  --market:#5B616B; --market-bg:#EFF0ED; --market-line:#D3D5D0;
+  --gov:#9A6A2F; --gov-bg:#F8F1E5; --gov-line:#E4D2B2;
+  --ok:#35705A; --err:#A14E50;
+  --sans:'Manrope',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --serif:'Newsreader',Georgia,'Times New Roman',serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+a{color:var(--buyer);text-decoration:none;}
+h1,h2,h3,h4{margin:0;font-weight:700;line-height:1.3;}
+p{margin:0 0 12px;}
+code{font-family:var(--mono);font-size:.86em;background:var(--market-bg);
+  border:1px solid var(--line);border-radius:4px;padding:.05em .4em;color:#3A414B;}
+
+/* ---------- top nav ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(247,247,245,.98);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+.topnav .wrap{display:flex;align-items:center;gap:18px;height:52px;}
+.brand{font-weight:700;font-size:14px;letter-spacing:.02em;white-space:nowrap;display:flex;align-items:center;gap:9px;}
+.brand .dot{width:18px;height:18px;border-radius:4px;background:var(--buyer);position:relative;flex:none;}
+.brand .dot::before{content:"";position:absolute;inset:4px;background:
+  radial-gradient(circle at 30% 30%,#fff 0,#fff 1.6px,transparent 1.8px),
+  radial-gradient(circle at 75% 70%,#9FD0C8 0,#9FD0C8 1.6px,transparent 1.8px);}
+.navlinks{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;}
+.navlinks::-webkit-scrollbar{display:none;}
+.navlinks a{font-size:13px;color:var(--ink2);padding:6px 10px;border-radius:5px;white-space:nowrap;}
+.navlinks a:hover{background:var(--market-bg);color:var(--ink);}
+.navlinks a.active{color:var(--buyer);background:var(--buyer-bg);font-weight:500;}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 44px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#FBFBFA 0%,var(--bg) 100%);}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center;}
+.kicker{font-family:var(--mono);font-size:12.5px;color:var(--buyer);letter-spacing:.08em;margin-bottom:18px;}
+.hero h1{font-family:var(--serif);font-size:42px;font-weight:800;letter-spacing:-.01em;margin-bottom:18px;}
+.hero .sub{font-size:16.5px;color:var(--ink2);max-width:34em;margin-bottom:26px;}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;}
+.chip{font-size:12.5px;border:1px solid var(--line2);background:var(--paper);border-radius:20px;
+  padding:5px 13px;color:var(--ink2);}
+.chip b{color:var(--ink);font-weight:600;}
+.hero-fig{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:18px;}
+.hero-fig .cap{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:10px;text-align:center;}
+
+/* ---------- section frame ---------- */
+section{padding:54px 0 8px;}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--ink3);font-weight:400;}
+.sec-head h2{font-family:var(--serif);font-size:27px;font-weight:700;}
+.sec-lead{color:var(--ink2);max-width:46em;margin:6px 0 26px;font-size:15px;}
+.sheet{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:24px;margin:18px 0;}
+.sheet > h4{font-size:14px;margin-bottom:14px;color:var(--ink);display:flex;align-items:center;gap:8px;}
+.note{font-size:13px;color:var(--ink2);background:var(--market-bg);border-left:3px solid var(--market);
+  padding:11px 15px;border-radius:0 6px 6px 0;margin:16px 0;}
+.note.gov{background:var(--gov-bg);border-left-color:var(--gov);}
+.note b{color:var(--ink);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+
+/* domain logic labels */
+.dom{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:400;
+  padding:1px 7px;border-radius:4px;letter-spacing:.04em;vertical-align:middle;}
+.dom.buyer{background:var(--buyer-bg);color:var(--buyer);border:1px solid var(--buyer-line);}
+.dom.seller{background:var(--seller-bg);color:var(--seller);border:1px solid var(--seller-line);}
+.dom.market{background:var(--market-bg);color:var(--market);border:1px solid var(--market-line);}
+.dom.gov{background:var(--gov-bg);color:var(--gov);border:1px solid var(--gov-line);}
+
+/* ---------- actor cards ---------- */
+.actor{border:1px solid var(--line);border-radius:8px;padding:16px 17px;background:var(--paper);height:100%;}
+.actor .role{font-size:11px;font-family:var(--mono);color:var(--ink3);margin-bottom:5px;}
+.actor h4{font-size:15.5px;margin-bottom:7px;}
+.actor p{font-size:13px;color:var(--ink2);margin:0;}
+.actor.buyer{border-top:3px solid var(--buyer);}
+.actor.seller{border-top:3px solid var(--seller);}
+.actor.market{border-top:3px solid var(--market);}
+.actor.gov{border-top:3px solid var(--gov);}
+
+/* ---------- layered architecture ---------- */
+.layer{display:grid;grid-template-columns:138px 1fr;border:1px solid var(--line);border-bottom:none;}
+.layer:last-child{border-bottom:1px solid var(--line);}
+.layer:first-child{border-radius:8px 8px 0 0;}
+.layer:last-child{border-radius:0 0 8px 8px;}
+.layer-tag{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;}
+.layer-tag .lt-name{font-weight:700;font-size:13.5px;}
+.layer-tag .lt-en{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px;line-height:1.4;}
+.layer-body{padding:12px;display:flex;flex-wrap:wrap;gap:9px;align-content:center;background:var(--paper);}
+.cell{border:1px solid var(--line2);border-radius:6px;padding:9px 11px;background:#FCFCFB;min-width:128px;flex:1;}
+.cell .cn{font-size:13px;font-weight:600;line-height:1.35;}
+.cell .cd{font-size:11.5px;color:var(--ink3);margin-top:3px;line-height:1.4;}
+.cell.buyer{border-left:3px solid var(--buyer);}
+.cell.seller{border-left:3px solid var(--seller);}
+.cell.market{border-left:3px solid var(--market);}
+.cell.gov{border-left:3px solid var(--gov);}
+.layer.l-buyer .layer-tag{background:var(--buyer-bg);}
+.layer.l-seller .layer-tag{background:var(--seller-bg);}
+.layer.l-market .layer-tag{background:var(--market-bg);}
+.layer.l-gov{grid-template-columns:138px 1fr;background:var(--gov-bg);}
+.layer.l-gov .layer-tag{background:transparent;}
+.layer.l-gov .layer-body{background:var(--gov-bg);}
+.layer.l-gov .cell{background:#FDFBF6;}
+.layer.l-base .layer-tag{background:var(--market-bg);}
+.cross-rail{display:flex;gap:9px;flex-wrap:wrap;}
+.cross-rail .cell{flex:1;min-width:150px;}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:4px 0 2px;font-size:12px;color:var(--ink2);}
+.legend span{display:inline-flex;align-items:center;gap:7px;}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block;}
+.sw.buyer{background:var(--buyer);} .sw.seller{background:var(--seller);}
+.sw.market{background:var(--market);} .sw.gov{background:var(--gov);}
+
+/* ---------- phase / stage flow ---------- */
+.phases{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+.phase{border:1px solid var(--line);padding:0;position:relative;background:var(--paper);}
+.phase + .phase{border-left:none;}
+.phase .ph-head{padding:11px 14px;border-bottom:1px solid var(--line);}
+.ph-head .ph-no{font-family:var(--mono);font-size:10.5px;color:var(--ink3);}
+.ph-head .ph-name{font-size:14px;font-weight:700;margin-top:2px;}
+.phase ul{list-style:none;margin:0;padding:10px 14px;}
+.phase li{font-size:12.5px;color:var(--ink2);padding:5px 0 5px 17px;position:relative;line-height:1.45;}
+.phase li::before{content:"";position:absolute;left:0;top:11px;width:7px;height:7px;border:1.5px solid var(--market);
+  border-radius:50%;background:var(--paper);}
+.phase.p1 .ph-head{background:var(--buyer-bg);} .phase.p1 li::before{border-color:var(--buyer);}
+.phase.p2 .ph-head{background:var(--seller-bg);} .phase.p2 li::before{border-color:var(--seller);}
+.phase.p3 .ph-head{background:var(--market-bg);} .phase.p3 li::before{border-color:var(--market);}
+.phase.p4 .ph-head{background:#EAF1EC;} .phase.p4 li::before{border-color:var(--ok);}
+.phase.p4{border-radius:0 8px 8px 0;} .phase.p1{border-radius:8px 0 0 8px;}
+.gate{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;}
+.gate .g{flex:1;min-width:200px;border:1px dashed var(--gov-line);background:var(--gov-bg);border-radius:6px;
+  padding:9px 13px;font-size:12.5px;color:#6f5326;}
+.gate .g b{color:var(--gov);}
+
+/* ---------- generic tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--paper);}
+.tbl-wrap{border:1px solid var(--line);border-radius:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:16px 0;}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+th{background:var(--market-bg);font-weight:700;font-size:12.5px;color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+td .mono,td code{font-size:12px;}
+.tbl-wrap table{table-layout:fixed;}
+
+/* ---------- timeline roadmap ---------- */
+.road{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:8px;}
+.mile{position:relative;padding:0 14px;}
+.mile .rail{position:relative;height:2px;background:var(--line2);margin:9px 0 20px;}
+.mile .rail::before{content:"";position:absolute;left:0;top:-5px;width:12px;height:12px;border-radius:50%;
+  background:var(--paper);border:2.5px solid var(--buyer);}
+.mile:last-child .rail{background:linear-gradient(90deg,var(--line2),var(--line2));}
+.mile .m-time{font-family:var(--mono);font-size:11.5px;color:var(--buyer);font-weight:500;}
+.mile h4{font-size:14px;margin:2px 0 7px;}
+.mile p{font-size:12.5px;color:var(--ink2);margin:0;}
+
+/* ---------- engine IPO ---------- */
+.ipo{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:0;align-items:stretch;}
+.ipo .col{padding:16px 17px;border:1px solid var(--line);background:var(--paper);}
+.ipo .col.in{border-right:none;background:#FBFCFD;}
+.ipo .col.out{border-left:none;background:#FBFCFB;}
+.ipo .col h4{font-size:13.5px;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--line);}
+.ipo ul{list-style:none;margin:0;padding:0;}
+.ipo li{font-size:12.5px;color:var(--ink2);padding:5px 0;line-height:1.45;}
+.ipo li b{color:var(--ink);font-weight:700;}
+.llm-box{border:1.5px dashed var(--gov-line);border-radius:7px;padding:12px 13px;margin-top:11px;background:var(--gov-bg);}
+.llm-box .t{font-size:12.5px;font-weight:700;color:var(--gov);margin-bottom:5px;}
+.llm-box p{font-size:12px;color:#6f5326;margin:0;}
+.arrow-h{display:none;}
+
+/* ---------- hitl matrix ---------- */
+.matrix td.lvl{font-family:var(--mono);font-size:12px;white-space:nowrap;}
+.tag-auto{color:var(--ok);font-weight:700;}
+.tag-hitl{color:var(--gov);font-weight:700;}
+.tag-deny{color:var(--err);font-weight:700;}
+
+/* ---------- json contract ---------- */
+pre.code{background:#23272E;color:#D8DEE6;border-radius:8px;padding:18px 20px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.65;margin:0;}
+pre.code .k{color:#8FB3E0;} pre.code .s{color:#A9CE9B;} pre.code .c{color:#7C8590;font-style:italic;}
+pre.code .n{color:#E0A878;}
+
+/* ---------- deploy ---------- */
+.deploy{display:grid;grid-template-columns:1fr 150px 1fr;gap:0;align-items:stretch;}
+.org{border:2px solid var(--line2);border-radius:10px;padding:15px;background:var(--paper);}
+.org.buyer-org{border-color:var(--buyer-line);}
+.org.seller-org{border-color:var(--seller-line);}
+.org .org-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.org .stack-item{border:1px solid var(--line);border-radius:6px;padding:8px 11px;font-size:12.5px;margin-bottom:8px;background:#FCFCFB;}
+.org .stack-item small{display:block;color:var(--ink3);font-size:11px;margin-top:1px;}
+.mid-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 8px;}
+.mid-node{width:100%;text-align:center;border:1.5px solid var(--market);background:var(--market-bg);border-radius:8px;
+  padding:11px 8px;font-size:12.5px;font-weight:700;color:var(--market);}
+.mid-node small{display:block;font-weight:400;color:var(--ink3);font-size:10.5px;margin-top:2px;}
+.link-label{font-family:var(--mono);font-size:10px;color:var(--ink3);text-align:center;line-height:1.4;}
+
+/* ---------- reliability cards ---------- */
+.rel{border:1px solid var(--line);border-radius:8px;padding:15px 17px;background:var(--paper);height:100%;}
+.rel h4{font-size:14px;margin-bottom:7px;}
+.rel p{font-size:12.8px;color:var(--ink2);margin:0;}
+.rel .pat{font-family:var(--mono);font-size:11px;color:var(--buyer);display:block;margin-bottom:6px;}
+
+footer{margin-top:60px;border-top:1px solid var(--line);padding:30px 0 50px;color:var(--ink3);font-size:12.5px;}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+
+/* ---------- responsive ---------- */
+.grid2>*,.grid3>*,.grid4>*,.phases>*,.road>*,.ipo>*,.deploy>*,.layer-body>*,.cross-rail>*{min-width:0;}
+pre.code{max-width:100%;}
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:1fr;gap:30px;}
+  .hero h1{font-size:33px;}
+  .grid4{grid-template-columns:1fr 1fr;}
+  .grid3{grid-template-columns:1fr;}
+  .grid2{grid-template-columns:1fr;}
+  .phases{grid-template-columns:1fr 1fr;}
+  .phase + .phase{border-left:1px solid var(--line);}
+  .phase.p1,.phase.p2{border-radius:0;}
+  .road{grid-template-columns:1fr 1fr;gap:18px 10px;}
+  .ipo{grid-template-columns:1fr;}
+  .ipo .col.in,.ipo .col.out{border:1px solid var(--line);}
+  .deploy{grid-template-columns:1fr;}
+  .mid-col{flex-direction:row;flex-wrap:wrap;padding:12px 0;}
+  .layer{grid-template-columns:1fr;}
+  .layer-tag{border-right:none;border-bottom:1px solid var(--line);flex-direction:row;gap:10px;align-items:baseline;}
+}
+@media (max-width:600px){
+  .wrap{padding:0 17px;}
+  .hero{padding:44px 0 32px;}
+  .hero h1{font-size:27px;}
+  .phases{grid-template-columns:1fr;}
+  .grid4{grid-template-columns:1fr;}
+  .road{grid-template-columns:1fr;}
+  .sheet{padding:16px;}
+  .topnav .wrap{height:auto;min-height:52px;padding-top:7px;padding-bottom:7px;}
+  .navlinks a{padding:11px 12px;}
+  .tbl-wrap table{min-width:680px;}
+  .rel p,.actor p,.ipo li,.phase li,.mile p,.deploy .stack-item,.grid2 li{font-size:14px;}
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>A2A Automated Quoting System</div>
+    <div class="navlinks" id="navlinks">
+      <a href="#overview">Overview</a>
+      <a href="#actors">Actors</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#flow">Process</a>
+      <a href="#sequence">Sequence</a>
+      <a href="#state">State Machine</a>
+      <a href="#engine">Pricing Engine</a>
+      <a href="#trust">Trust &amp; Governance</a>
+      <a href="#reliability">Reliability</a>
+      <a href="#deployment">Deployment</a>
+      <a href="#stack">Tech Stack</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#contract">Data Contracts</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker">ARCHITECTURE BLUEPRINT · v1.0 · CONCEPTUAL DESIGN</div>
+      <h1>Agent-to-Agent<br>Automated Quoting System</h1>
+      <p class="sub">Built on the open A2A (Agent2Agent) protocol, buyer and supplier agents in separate organizations automatically complete the cross-enterprise loop of <b>RFQ → quote → compare / negotiate → award → close &amp; settlement</b>. The LLM handles understanding, orchestration and negotiation; deterministic rules and pricing models own the pricing boundaries; humans keep control of every key decision.</p>
+      <div class="meta-row">
+        <span class="chip">Document <b>· System Architecture Design</b></span>
+        <span class="chip">Primary scenario <b>· B2B procurement / supply-chain tendering</b></span>
+        <span class="chip">Version <b>· v1.0</b></span>
+        <span class="chip">Date <b>· 2026-09</b></span>
+      </div>
+    </div>
+    <div class="hero-fig">
+      <svg viewBox="0 0 360 232" width="100%" role="img" aria-label="A2A quoting participants overview">
+        <defs>
+          <marker id="ar" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#8A8F98"/></marker>
+        </defs>
+        <!-- buyer -->
+        <rect x="16" y="86" width="92" height="60" rx="8" fill="#EEF2F8" stroke="#4F6B9A" stroke-width="1.5"/>
+        <text x="62" y="110" text-anchor="middle" font-size="12.5" font-weight="700" fill="#4F6B9A">Buyer Agent</text>
+        <text x="62" y="128" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">RFQ / Award</text>
+        <!-- marketplace -->
+        <rect x="138" y="80" width="84" height="72" rx="8" fill="#EFF0ED" stroke="#5B616B" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="180" y="101" text-anchor="middle" font-size="11.5" font-weight="700" fill="#5B616B">Registration</text>
+        <text x="180" y="120" text-anchor="middle" font-size="11.5" font-weight="700" fill="#5B616B">Match / Coordinate</text>
+        <text x="180" y="138" text-anchor="middle" font-size="9" fill="#8A8F98" font-family="monospace">Agent Card</text>
+        <!-- suppliers -->
+        <rect x="252" y="26" width="92" height="52" rx="8" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+        <text x="298" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#2F7D74">Supplier Agent A</text>
+        <text x="298" y="65" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">Quote</text>
+        <rect x="252" y="154" width="92" height="52" rx="8" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+        <text x="298" y="176" text-anchor="middle" font-size="12" font-weight="700" fill="#2F7D74">Supplier Agent B</text>
+        <text x="298" y="193" text-anchor="middle" font-size="9.5" fill="#5F6670" font-family="monospace">Quote</text>
+        <!-- links -->
+        <path d="M108 106 C124 100 126 102 138 104" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M138 124 C124 128 124 126 108 128" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M222 100 C240 80 240 62 252 56" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M252 176 C238 168 236 150 222 136" fill="none" stroke="#8A8F98" stroke-width="1.4" marker-end="url(#ar)"/>
+        <path d="M252 64 C236 84 238 104 222 116" fill="none" stroke="#B9C0C9" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+        <path d="M222 124 C240 140 240 160 252 168" fill="none" stroke="#B9C0C9" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+      </svg>
+      <div class="cap">Cross-organization A2A collaboration · illustrative (not an official topology)</div>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">01</span><h2>Overview &amp; Design Goals</h2></div>
+    <p class="sec-lead">The A2A automated quoting system upgrades the "person-to-person / portal-to-portal" RFQ and quoting process into "agent-to-agent" automated collaboration: each organization runs its own agent inside its security boundary, exchanging structured RFQs and quotes over an open protocol externally, while calling inventory, capacity, cost and pricing capabilities through tool interfaces internally. It does not let an LLM quote prices freely — it is a transaction infrastructure of <b>protocol interoperability + deterministic pricing + controllable autonomy + end-to-end traceability</b>.</p>
+
+    <div class="grid3" style="margin-top:20px;">
+      <div class="rel"><span class="pat">GOAL · 01</span><h4>Interoperable</h4><p>Built on the open A2A protocol and JSON-Schema-based RFQ / Quote contracts, heterogeneous agents from different vendors and models can "plug and play" across organizations without point-to-point custom integration.</p></div>
+      <div class="rel"><span class="pat">GOAL · 02</span><h4>Automated</h4><p>The LLM handles requirement understanding, task orchestration, multi-round clarification and negotiation; rules / pricing models handle available-to-promise checks and pricing. RFQ-to-quote is hands-free within SLA, escalating only on exceptions.</p></div>
+      <div class="rel"><span class="pat">GOAL · 03</span><h4>Trustworthy</h4><p>Strong identity for organizations and agents, least privilege, sealed bids invisible before opening, verifiable credentials, and a tamper-evident audit trail across the full chain — preventing unauthorized quotes and bid rigging.</p></div>
+      <div class="rel"><span class="pat">GOAL · 04</span><h4>Reliable</h4><p>Idempotency keys, timeout-and-retry, quote validity with price locking, Saga compensation and Outbox/Inbox guarantee eventual consistency for long cross-organization flows, with replayable and reconcilable failures.</p></div>
+      <div class="rel"><span class="pat">GOAL · 05</span><h4>Governable</h4><p>Amount thresholds, automation boundaries, the human-in-the-loop (HITL) permission matrix, price guardrails and compliance screening are all policy-driven; the level of autonomy can be tuned by risk.</p></div>
+      <div class="rel"><span class="pat">GOAL · 06</span><h4>Extensible &amp; Observable</h4><p>A new supplier is discovered and onboarded simply by publishing an Agent Card; trace context propagates across agents so metrics, logs and conversations are trackable, replayable and measurable.</p></div>
+    </div>
+
+    <div class="note gov" style="margin-top:22px;">
+      <b>Core design principle — the LLM never sets price directly.</b> The LLM handles unstructured information understanding, planning, multi-round clarification and negotiation language, and produces explainable narratives; <b>the price figure is produced by deterministic rules / pricing models within an authorized range (floor price, target margin, discount authority)</b>. The LLM may only negotiate inside that feasible range. Any out-of-range request, below-cost red line or compliance hit is blocked by guardrails and escalated to a human, eliminating "the model making up prices" at the root.
+    </div>
+
+    <div class="grid2" style="margin-top:18px;">
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom buyer">FITS</span> Typical scenarios</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">B2B raw-material / MRO / services procurement and supply-chain RFQs, tendering and reverse auctions, logistics and shipping freight rates, cloud-resource / API-style service transactions, insurance and financial-product quoting (the latter requires industry compliance and suitability overlays). Common traits: <b>non-standard or semi-standard goods, multiple suppliers, multi-round negotiation, and deal sizes worth automating</b>.</p>
+      </div>
+      <div class="sheet" style="margin:0;">
+        <h4><span class="dom gov">LIMITS</span> Not applicable / use caution</h4>
+        <p style="font-size:13.5px;color:var(--ink2);margin:0;">Large or high-risk awards must never be fully automatic — they require HITL; highly standardized exchange-traded contracts should be matched by an exchange engine rather than A2A negotiation; heavily regulated products stay closed to automated quoting until compliance is in place; <b>A2A targets task-level long-lived conversations, not millisecond market making</b>, which needs dedicated low-latency systems.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="actors">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">02</span><h2>Actors &amp; Trust Boundaries</h2></div>
+    <p class="sec-lead">The system consists of "three organizational domains + cross-cutting trust authorities": the buyer domain and several supplier domains each run agents inside their own private boundary; the marketplace operator only provides neutral discovery, matching and witnessing and <b>never touches anyone's cost / floor price or other trade secrets</b>; identity and approval capabilities cut across all domains.</p>
+    <div class="grid4">
+      <div class="actor buyer"><div class="role">BUYER DOMAIN</div><h4>Buyer Agent</h4><p>Requirement parsing and RFQ authoring, sourcing strategy, supplier discovery and eligibility pre-screening, multi-attribute comparison, counter-offer strategy, award recommendation; integrates with procurement / finance systems.</p></div>
+      <div class="actor seller"><div class="role">SUPPLIER DOMAIN ×N</div><h4>Supplier Agent</h4><p>Intake of RFQs, pre-qualification, available-to-promise (ATP) / capacity / inventory checks, cost build-up and pricing, generating and submitting quotes, participating in multi-round negotiation.</p></div>
+      <div class="actor market"><div class="role">NEUTRAL PARTY</div><h4>Marketplace Operator / Orchestrator</h4><p>Runs the registration directory and capability marketplace, organizes RFQ / bidding sessions, manages deadlines and bid opening, provides a neutral clock and audit witness; does not participate in pricing.</p></div>
+      <div class="actor market"><div class="role">DISCOVERY</div><h4>Registry</h4><p>Hosts each agent's Agent Card (endpoint, skills, auth methods, streaming / push capabilities), verifiable credentials and reputation scores, powering capability matching and discovery.</p></div>
+      <div class="actor gov"><div class="role">TRUST</div><h4>Identity &amp; Trust Authority</h4><p>Issues OIDC / OAuth2, mTLS certificates, DIDs and verifiable credentials (VC), binding each agent to its organization and providing the trust root for qualification, authorization and signing.</p></div>
+      <div class="actor gov"><div class="role">HUMAN-IN-THE-LOOP</div><h4>Human Approval Nodes</h4><p>Approvers on both sides: over-discount / over-amount quotes, new suppliers, abnormally low prices and large awards trigger a push notification for a human to approve or reject.</p></div>
+      <div class="actor market"><div class="role">SYSTEMS OF RECORD</div><h4>Enterprise Back-Office Systems</h4><p>ERP / CRM / PIM catalog / WMS inventory / APS capacity / finance / FX, safely invoked by each agent through an MCP tool gateway; data never leaves the domain.</p></div>
+      <div class="actor market"><div class="role">SETTLEMENT</div><h4>Contract &amp; Settlement</h4><p>After award: contract / purchase-order generation, CA e-signature, fulfillment and acceptance, invoicing, payment or escrow, and four-party reconciliation.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">03</span><h2>Layered Architecture</h2></div>
+    <p class="sec-lead">From top to bottom: access channels, the two buyer / supplier agent runtimes, the A2A collaboration protocol layer, transaction services, a cross-cutting trust &amp; governance plane, and integration/data plus infrastructure. <b>The buyer and supplier agent runtimes are deployed inside their own organizational boundaries and communicate across domains only through the A2A protocol layer</b>; sensitive data such as cost, floor price and inventory never leaves the local domain.</p>
+
+    <div class="legend">
+      <span><i class="sw buyer"></i>Buyer domain (purchaser)</span>
+      <span><i class="sw seller"></i>Supplier domain (suppliers ×N)</span>
+      <span><i class="sw market"></i>Neutral platform / shared capability</span>
+      <span><i class="sw gov"></i>Trust &amp; governance (cross-cutting)</span>
+    </div>
+
+    <div class="sheet" style="padding:18px;">
+      <!-- L0 -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">Channels</div><div class="lt-en">L0 · Channels</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">Buyer workspace / approval console</div><div class="cd">Requirement entry · award approval</div></div>
+          <div class="cell market"><div class="cn">Supplier ops / quoting console</div><div class="cd">Quote review · authority approval</div></div>
+          <div class="cell market"><div class="cn">Open API / Webhook</div><div class="cd">Integration · async callbacks</div></div>
+          <div class="cell market"><div class="cn">Enterprise IM · email · mobile push</div><div class="cd">HITL notifications &amp; to-dos</div></div>
+        </div>
+      </div>
+      <!-- L1 buyer -->
+      <div class="layer l-buyer">
+        <div class="layer-tag"><div class="lt-name">Buyer Agent Runtime</div><div class="lt-en">L1 · Buyer Agent</div></div>
+        <div class="layer-body">
+          <div class="cell buyer"><div class="cn">Requirement understanding &amp; planning</div><div class="cd">Intent → specs / qty / lead time</div></div>
+          <div class="cell buyer"><div class="cn">Sourcing &amp; award strategy</div><div class="cd">RFQ scope · budget · evaluation method</div></div>
+          <div class="cell buyer"><div class="cn">Quote evaluation &amp; negotiation</div><div class="cd">TCO scoring · counter-offer strategy</div></div>
+          <div class="cell buyer"><div class="cn">Agent core</div><div class="cd">LLM orchestration · memory · tool calls</div></div>
+          <div class="cell buyer"><div class="cn">Output guardrails</div><div class="cd">Budget red lines · compliance checks</div></div>
+          <div class="cell buyer"><div class="cn">HITL approval gateway</div><div class="cd">High-value award escalation</div></div>
+        </div>
+      </div>
+      <!-- L1 seller -->
+      <div class="layer l-seller">
+        <div class="layer-tag"><div class="lt-name">Supplier Agent Runtime</div><div class="lt-en">L1 · Supplier Agent</div></div>
+        <div class="layer-body">
+          <div class="cell seller"><div class="cn">RFQ intake &amp; pre-qualification</div><div class="cd">Can we make it · should we bid</div></div>
+          <div class="cell seller"><div class="cn">ATP / capacity / inventory checks</div><div class="cd">Available-to-promise · lead time</div></div>
+          <div class="cell seller"><div class="cn">Cost build-up &amp; pricing engine</div><div class="cd">Rules / models price within authority</div></div>
+          <div class="cell seller"><div class="cn">Quote generation &amp; counter-offers</div><div class="cd">Structured Quote · negotiation strategy</div></div>
+          <div class="cell seller"><div class="cn">Agent core + guardrails</div><div class="cd">LLM orchestration · floor price is a hard boundary</div></div>
+          <div class="cell seller"><div class="cn">HITL approval gateway</div><div class="cd">Over-discount / over-authority escalation</div></div>
+        </div>
+      </div>
+      <!-- L2 A2A -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">A2A Protocol Layer</div><div class="lt-en">L2 · A2A Protocol</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">Agent Card discovery</div><div class="cd">/.well-known/agent.json</div></div>
+          <div class="cell market"><div class="cn">A2A Server / Client</div><div class="cd">JSON-RPC 2.0 over HTTPS</div></div>
+          <div class="cell market"><div class="cn">Task lifecycle</div><div class="cd">submitted→working→completed</div></div>
+          <div class="cell market"><div class="cn">Message / Part / Artifact</div><div class="cd">Text · files · structured data</div></div>
+          <div class="cell market"><div class="cn">SSE streaming + Push</div><div class="cd">Async long-task callbacks</div></div>
+          <div class="cell market"><div class="cn">Multi-agent orchestration</div><div class="cd">Fan-out RFQ / bidding sessions</div></div>
+          <div class="cell market"><div class="cn">Protocol adaptation</div><div class="cd">A2A ↔ EDI / REST</div></div>
+        </div>
+      </div>
+      <!-- L3 transaction -->
+      <div class="layer l-market">
+        <div class="layer-tag"><div class="lt-name">Transaction Services</div><div class="lt-en">L3 · Transaction</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">RFQ / inquiry management</div><div class="cd">Templates · deadlines · terms</div></div>
+          <div class="cell market"><div class="cn">Quote &amp; version management</div><div class="cd">Validity · currency · tax · incoterms</div></div>
+          <div class="cell market"><div class="cn">Comparison / bidding engine</div><div class="cd">Sealed tender · reverse auction</div></div>
+          <div class="cell market"><div class="cn">Multi-attribute scoring &amp; award</div><div class="cd">TCO · constrained optimization · recommendation</div></div>
+          <div class="cell market"><div class="cn">Pricing / discount policy center</div><div class="cd">Price lists · floor · authority matrix</div></div>
+          <div class="cell market"><div class="cn">Rule engine</div><div class="cd">Eligibility · credit · trade-control screening</div></div>
+          <div class="cell market"><div class="cn">Contract / PO</div><div class="cd">Templates · e-signature</div></div>
+        </div>
+      </div>
+      <!-- L4 governance cross-cutting -->
+      <div class="layer l-gov">
+        <div class="layer-tag"><div class="lt-name">Trust &amp; Governance</div><div class="lt-en">L4 · Cross-cutting</div></div>
+        <div class="layer-body">
+          <div class="cross-rail" style="width:100%;">
+            <div class="cell gov"><div class="cn">Identity SSO / mTLS</div></div>
+            <div class="cell gov"><div class="cn">Authorization &amp; consent scopes</div></div>
+            <div class="cell gov"><div class="cn">Sealed bids / TEE decryption</div></div>
+            <div class="cell gov"><div class="cn">Risk control · anti-collusion</div></div>
+            <div class="cell gov"><div class="cn">Limits · guardrails · HITL escalation</div></div>
+            <div class="cell gov"><div class="cn">Audit · compliance record</div></div>
+            <div class="cell gov"><div class="cn">Observability trace / replay</div></div>
+          </div>
+        </div>
+      </div>
+      <!-- L5 integration/data -->
+      <div class="layer l-base">
+        <div class="layer-tag"><div class="lt-name">Integration &amp; Data</div><div class="lt-en">L5 · Integration</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">MCP tool gateway</div><div class="cd">ERP/CRM/PIM/WMS/APS/finance</div></div>
+          <div class="cell market"><div class="cn">Operational database</div><div class="cd">Quotes · price lists · supplier master</div></div>
+          <div class="cell market"><div class="cn">Conversation / task store</div><div class="cd">A2A Task state persistence</div></div>
+          <div class="cell market"><div class="cn">Event bus Kafka / MQ</div><div class="cd">Event-driven · Saga · Outbox</div></div>
+          <div class="cell market"><div class="cn">Cache · vector store</div><div class="cd">Memory · historical-deal retrieval</div></div>
+          <div class="cell market"><div class="cn">External networks</div><div class="cd">Payment · e-sign · credit · logistics</div></div>
+        </div>
+      </div>
+      <!-- L6 infra -->
+      <div class="layer l-base">
+        <div class="layer-tag"><div class="lt-name">Infrastructure</div><div class="lt-en">L6 · Infra</div></div>
+        <div class="layer-body">
+          <div class="cell market"><div class="cn">Multi-tenant · containers / K8s</div></div>
+          <div class="cell market"><div class="cn">API gateway / service mesh</div></div>
+          <div class="cell market"><div class="cn">KMS / secret management</div></div>
+          <div class="cell market"><div class="cn">Cross-organization federated deployment</div></div>
+          <div class="cell market"><div class="cn">Multi-region disaster recovery</div></div>
+          <div class="cell market"><div class="cn">LLM gateway</div><div class="cd">Multi-model · rate limiting · token audit</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>How to read this diagram:</b> L4 Trust &amp; Governance is a <b>cross-cutting plane</b> that logically spans every layer L0–L6 (laid out in one place here for layout reasons); the commercially sensitive parts of L5–L6 (cost, floor price, inventory, capacity) always stay inside each organization's private domain, and only authorized RFQ / Quote messages and necessary credentials cross domains. <b>A2A governs agent-to-agent collaboration, while MCP governs an agent's connection to internal tools / data</b> — the two are orthogonal and do not replace each other.</div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">04</span><h2>End-to-End Process</h2></div>
+    <p class="sec-lead">An automated quoting transaction proceeds through four phases and 16 steps, with mandatory stage gates between phases. The happy path flows automatically between agents; when a risk condition is hit, the flow is escalated to a human at a gate or blocked, forming an autonomy model that is <b>"automatic by default, with controllable boundaries"</b>.</p>
+
+    <div class="sheet" style="padding:18px;">
+      <div class="phases">
+        <div class="phase p1">
+          <div class="ph-head"><div class="ph-no">PHASE 1</div><div class="ph-name">RFQ &amp; Discovery</div></div>
+          <ul>
+            <li>Structure the requirement and generate the RFQ (specs / quantity / lead time / terms / evaluation method / deadline)</li>
+            <li>Fetch Agent Cards; match suppliers by capability / region / category</li>
+            <li>Verify qualifications, credit and verifiable credentials (VC)</li>
+            <li>Fan out the RFQ task, sealed or open</li>
+          </ul>
+        </div>
+        <div class="phase p2">
+          <div class="ph-head"><div class="ph-no">PHASE 2</div><div class="ph-name">Intake &amp; Quoting</div></div>
+          <ul>
+            <li>Supplier pre-qualification and bid / no-bid decision</li>
+            <li>ATP / capacity / inventory checks; compute a promiseable lead time</li>
+            <li>Cost breakdown; the pricing engine bids within the authorized range</li>
+            <li>Guardrail checks; escalate beyond authority to a human; submit structured Quote</li>
+          </ul>
+        </div>
+        <div class="phase p3">
+          <div class="ph-head"><div class="ph-no">PHASE 3</div><div class="ph-name">Evaluation &amp; Award</div></div>
+          <ul>
+            <li>Clarification Q&amp;A and multi-round counter-offers; quote versions recorded</li>
+            <li>Open sealed bids at deadline, or run a live reverse auction</li>
+            <li>Normalize currency / tax / incoterms / lead time; TCO scoring</li>
+            <li>Produce an award recommendation; high-value / anomalous awards go to HITL</li>
+          </ul>
+        </div>
+        <div class="phase p4">
+          <div class="ph-head"><div class="ph-no">PHASE 4</div><div class="ph-name">Close &amp; Fulfillment</div></div>
+          <ul>
+            <li>Generate contract / purchase order (PO); CA e-signature</li>
+            <li>Order fulfillment, shipment and acceptance</li>
+            <li>Invoicing, payment or escrow</li>
+            <li>Four-party reconciliation; performance &amp; reputation feedback; price learning</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="gate">
+        <div class="g"><b>G1 Eligibility Gate</b>: failed qualification / credit / sanctions screening → not invited or not accepted.</div>
+        <div class="g"><b>G2 Pricing Authority Gate</b>: below the cost floor or beyond discount authority → blocked and escalated to HITL.</div>
+        <div class="g"><b>G3 Bid-Opening Gate</b>: sealed bids are invisible to everyone before the deadline; threshold decryption opens them at the deadline.</div>
+        <div class="g"><b>G4 Award Gate</b>: amount / anomaly / new-supplier conditions trigger human review; all others award automatically.</div>
+      </div>
+    </div>
+    <div class="note">Every quote carries a <b>validity period and an idempotency key</b>: it lapses automatically when expired (no award / no order); once awarded, the price is locked within validity and converted to an order. If the winning supplier fails to fulfill after award, the plan falls back to the runner-up or triggers a compensation flow to re-run the RFQ (see §09).</div>
+  </div>
+</section>
+
+<section id="sequence">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">05</span><h2>A2A Protocol Interaction Sequence</h2></div>
+    <p class="sec-lead">Using a sealed RFQ from one buyer to two suppliers as an example, the diagram shows the cross-organization A2A message flow: discover via Agent Card, submit the RFQ as a JSON-RPC task, suppliers stream progress over SSE, complete pricing inside their private domain via MCP, push for human approval when authority is exceeded, and finally return structured quotes followed by multi-round negotiation and award.</p>
+    <div class="sheet" style="padding:16px;">
+      <div style="overflow-x:auto;">
+      <svg viewBox="0 0 1040 678" width="100%" style="min-width:820px;height:auto;" role="img" aria-label="A2A protocol interaction sequence diagram">
+        <defs>
+          <marker id="sqArr" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto">
+            <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#6b7280"/></marker>
+        </defs>
+        <style>
+          .hd{font-size:13px;font-weight:700;}
+          .hd2{font-size:9.5px;font-family:var(--mono);}
+          .life{stroke:#c9ccd1;stroke-width:1.2;stroke-dasharray:4 4;}
+          .msg{stroke:#6b7280;stroke-width:1.4;}
+          .ml{paint-order:stroke;stroke:#ffffff;stroke-width:6px;stroke-linejoin:round;font-size:12px;fill:#333a42;}
+          .ml .m{font-family:var(--mono);font-size:11px;fill:#1f252c;font-weight:700;}
+          .ml .d{fill:#7a818b;font-size:11px;}
+          .num{font-family:var(--mono);font-size:10px;fill:#9aa0a8;}
+        </style>
+
+        <!-- lifelines -->
+        <line class="life" x1="90" y1="66" x2="90" y2="626"/>
+        <line class="life" x1="305" y1="66" x2="305" y2="626"/>
+        <line class="life" x1="520" y1="66" x2="520" y2="626"/>
+        <line class="life" x1="735" y1="66" x2="735" y2="626"/>
+        <line class="life" x1="950" y1="66" x2="950" y2="626"/>
+
+        <!-- heads -->
+        <g>
+          <rect x="16" y="18" width="148" height="46" rx="6" fill="#EEF2F8" stroke="#4F6B9A" stroke-width="1.5"/>
+          <text class="hd" x="90" y="38" text-anchor="middle" fill="#4F6B9A">Buyer Agent</text>
+          <text class="hd2" x="90" y="54" text-anchor="middle" fill="#5F6670">Purchaser</text>
+
+          <rect x="231" y="18" width="148" height="46" rx="6" fill="#EFF0ED" stroke="#5B616B" stroke-width="1.5"/>
+          <text class="hd" x="305" y="38" text-anchor="middle" fill="#5B616B">Registry</text>
+          <text class="hd2" x="305" y="54" text-anchor="middle" fill="#5F6670">Registry / Discovery</text>
+
+          <rect x="446" y="18" width="148" height="46" rx="6" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+          <text class="hd" x="520" y="38" text-anchor="middle" fill="#2F7D74">Supplier Agent A</text>
+          <text class="hd2" x="520" y="54" text-anchor="middle" fill="#5F6670">Supplier A</text>
+
+          <rect x="661" y="18" width="148" height="46" rx="6" fill="#E8F2F0" stroke="#2F7D74" stroke-width="1.5"/>
+          <text class="hd" x="735" y="38" text-anchor="middle" fill="#2F7D74">Supplier Agent B</text>
+          <text class="hd2" x="735" y="54" text-anchor="middle" fill="#5F6670">Supplier B</text>
+
+          <rect x="876" y="18" width="148" height="46" rx="6" fill="#F8F1E5" stroke="#9A6A2F" stroke-width="1.5"/>
+          <text class="hd" x="950" y="38" text-anchor="middle" fill="#9A6A2F">Approver</text>
+          <text class="hd2" x="950" y="54" text-anchor="middle" fill="#5F6670">Approver · HITL</text>
+        </g>
+
+        <!-- 1 discover -->
+        <line class="msg" x1="90" y1="100" x2="297" y2="100" marker-end="url(#sqArr)"/>
+        <text class="ml" x="193" y="93" text-anchor="middle"><tspan class="num">1 </tspan><tspan class="m">GET agent.json</tspan></text>
+        <!-- 2 cards -->
+        <line class="msg" x1="305" y1="138" x2="98" y2="138" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="201" y="131" text-anchor="middle"><tspan class="num">2 </tspan><tspan class="d">Returns Agent Cards: endpoint · skills · auth methods</tspan></text>
+        <!-- 3 send A -->
+        <line class="msg" x1="90" y1="176" x2="512" y2="176" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="169" text-anchor="middle"><tspan class="num">3 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · submit RFQ (Data Part)</tspan></text>
+        <!-- 4 fan-out B -->
+        <line class="msg" x1="90" y1="214" x2="727" y2="214" marker-end="url(#sqArr)"/>
+        <text class="ml" x="408" y="207" text-anchor="middle"><tspan class="num">4 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · fan-out RFQ (sealed)</tspan></text>
+        <!-- 5 sse status -->
+        <line class="msg" x1="520" y1="252" x2="98" y2="252" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="245" text-anchor="middle"><tspan class="num">5 </tspan><tspan class="m">SSE</tspan><tspan class="d"> submitted → working (progress stream)</tspan></text>
+        <!-- 6 self MCP -->
+        <path class="msg" d="M520,282 h66 v20 h-58" fill="none" marker-end="url(#sqArr)"/>
+        <text class="ml" x="596" y="296"><tspan class="num">6 </tspan><tspan class="m">MCP tools</tspan><tspan class="d"> inventory / capacity / cost / pricing (inside private domain)</tspan></text>
+        <!-- 7 push to approver -->
+        <line class="msg" x1="520" y1="332" x2="942" y2="332" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="731" y="325" text-anchor="middle"><tspan class="num">7 </tspan><tspan class="m">pushNotification</tspan><tspan class="d"> over-authority quote pending approval</tspan></text>
+        <!-- 8 approve -->
+        <line class="msg" x1="950" y1="370" x2="528" y2="370" marker-end="url(#sqArr)"/>
+        <text class="ml" x="739" y="363" text-anchor="middle"><tspan class="num">8 </tspan><tspan class="d">HITL approve / reject (with approval record)</tspan></text>
+        <!-- 9 quote v1 -->
+        <line class="msg" x1="520" y1="408" x2="98" y2="408" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="401" text-anchor="middle"><tspan class="num">9 </tspan><tspan class="m">completed + Artifact</tspan><tspan class="d"> · Quote v1</tspan></text>
+        <!-- 10 counter -->
+        <line class="msg" x1="90" y1="446" x2="512" y2="446" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="439" text-anchor="middle"><tspan class="num">10 </tspan><tspan class="m">message/send</tspan><tspan class="d"> · counter-offer (input-required loop)</tspan></text>
+        <!-- 11 quote v2 -->
+        <line class="msg" x1="520" y1="484" x2="98" y2="484" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="477" text-anchor="middle"><tspan class="num">11 </tspan><tspan class="m">completed + Artifact</tspan><tspan class="d"> · Quote v2 (versioned)</tspan></text>
+        <!-- 12 cancel B -->
+        <line class="msg" x1="90" y1="522" x2="727" y2="522" marker-end="url(#sqArr)"/>
+        <text class="ml" x="408" y="515" text-anchor="middle"><tspan class="num">12 </tspan><tspan class="m">tasks/cancel</tspan><tspan class="d"> · terminate B's task (not awarded)</tspan></text>
+        <!-- 13 award -->
+        <line class="msg" x1="90" y1="560" x2="512" y2="560" marker-end="url(#sqArr)"/>
+        <text class="ml" x="301" y="553" text-anchor="middle"><tspan class="num">13 </tspan><tspan class="m">Award</tspan><tspan class="d"> · PO intent (carried by Artifact)</tspan></text>
+        <!-- 14 confirmed -->
+        <line class="msg" x1="520" y1="598" x2="98" y2="598" stroke-dasharray="6 4" marker-end="url(#sqArr)"/>
+        <text class="ml" x="309" y="591" text-anchor="middle"><tspan class="num">14 </tspan><tspan class="m">confirmed</tspan><tspan class="d"> · accept &amp; lock price, move to fulfillment</tspan></text>
+
+        <!-- end bar -->
+        <rect x="90" y="632" width="860" height="32" rx="6" fill="#EAF1EC" stroke="#35705A" stroke-width="1.2"/>
+        <text x="520" y="652" text-anchor="middle" font-size="12.5px" fill="#35705A" font-weight="700">Close: lock price and generate contract / PO → fulfillment · acceptance · invoice · settlement (Phase 4)</text>
+      </svg>
+      </div>
+    </div>
+    <div class="legend" style="margin-top:6px;">
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#6b7280" stroke-width="1.6"/></svg> Request / invocation (message/send, cancel, Award)</span>
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#6b7280" stroke-width="1.6" stroke-dasharray="5 3"/></svg> Response / async notification (SSE, Artifact, push)</span>
+    </div>
+    <div class="note">Long-running pricing and approvals are always <b>asynchronous</b>: the caller subscribes to SSE via <code>message/stream</code>, or first registers a webhook with <code>tasks/pushNotificationConfig/set</code> so the supplier pushes when the quote is ready or approval is pending, avoiding long-lived blocking connections; every request carries an <b>idempotency key</b> so retries never create duplicate quotes or duplicate awards.</div>
+  </div>
+</section>
+
+<section id="state">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">06</span><h2>Quoting Task State Machine</h2></div>
+    <p class="sec-lead">The complete states and transition conditions of a quoting task from draft to settlement/archive. During competition, quotes are <b>sealed</b> before the deadline; over-authority quotes enter an <b>HITL approval branch</b>; expired, withdrawn, cancelled, failed and non-winning quotes converge into exception terminal states; after close the task proceeds along the fulfillment chain, and a fulfillment failure triggers <b>Saga compensation</b> to fall back to the runner-up.</p>
+    <div class="sheet" style="padding:16px;">
+      <div style="overflow-x:auto;">
+      <svg viewBox="0 0 1040 508" width="100%" style="min-width:860px;height:auto;" role="img" aria-label="Quoting task state machine">
+        <defs>
+          <marker id="stG" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#6b7280"/></marker>
+          <marker id="stR" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#A14E50"/></marker>
+          <marker id="stA" markerWidth="9" markerHeight="9" refX="7.5" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 Z" fill="#9A6A2F"/></marker>
+        </defs>
+        <style>
+          .st{fill:#FCFCFB;stroke:#C4C8CD;stroke-width:1.3;}
+          .stt{font-size:13px;font-weight:700;fill:#1A1B1C;}
+          .ste{font-size:9.5px;font-family:var(--mono);fill:#8A8F98;}
+          .ap{fill:#F8F1E5;stroke:#9A6A2F;stroke-width:1.4;} .apt{font-size:13px;font-weight:700;fill:#7A5520;}
+          .wd{fill:#EAF1EC;stroke:#35705A;stroke-width:1.4;} .wdt{font-size:13px;font-weight:700;fill:#2C5E4B;}
+          .cl{fill:#EFF0ED;stroke:#5B616B;stroke-width:1.4;} .clt{font-size:13px;font-weight:700;fill:#3f454d;}
+          .tr{stroke:#6b7280;stroke-width:1.4;fill:none;}
+          .tl{font-size:11px;fill:#5F6670;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round;}
+          .bad{stroke:#A14E50;stroke-width:1.3;stroke-dasharray:5 4;fill:none;}
+          .badl{font-size:11px;fill:#A14E50;paint-order:stroke;stroke:#fff;stroke-width:5px;}
+          .cmp{stroke:#9A6A2F;stroke-width:1.3;stroke-dasharray:6 4;fill:none;}
+          .cmpl{font-size:11.5px;fill:#9A6A2F;paint-order:stroke;stroke:#fff;stroke-width:5px;}
+          .chip{fill:#fff;stroke:#E2B9BA;stroke-width:1.1;} .chipt{font-size:11px;fill:#8A3F41;}
+        </style>
+
+        <!-- row 1 -->
+        <g>
+          <rect class="st" x="45" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="110" y="83" text-anchor="middle">Draft</text><text class="ste" x="110" y="99" text-anchor="middle">Draft</text>
+          <rect class="st" x="225" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="290" y="83" text-anchor="middle">Dispatched</text><text class="ste" x="290" y="99" text-anchor="middle">Dispatched</text>
+          <rect class="st" x="405" y="61" width="130" height="50" rx="7"/>
+          <text class="stt" x="470" y="83" text-anchor="middle">Preparing Quote</text><text class="ste" x="470" y="99" text-anchor="middle">working · clarifiable</text>
+          <rect class="ap" x="580" y="61" width="160" height="50" rx="7"/>
+          <text class="apt" x="660" y="83" text-anchor="middle">Pending Approval</text><text class="ste" x="660" y="99" text-anchor="middle">input-required · HITL</text>
+        </g>
+        <!-- row1 arrows -->
+        <path class="tr" d="M175,86 H225" marker-end="url(#stG)"/><text class="tl" x="200" y="80" text-anchor="middle">Dispatch RFQ</text>
+        <path class="tr" d="M355,86 H405" marker-end="url(#stG)"/><text class="tl" x="380" y="80" text-anchor="middle">Accepted</text>
+        <path class="tr" d="M535,86 H580" marker-end="url(#stG)"/><text class="tl" x="557" y="80" text-anchor="middle">Escalate</text>
+        <!-- approval reject loop back -->
+        <path class="tr" d="M600,61 C600,28 470,28 470,61" marker-end="url(#stG)"/>
+        <text class="tl" x="535" y="24" text-anchor="middle">Reject / revise</text>
+
+        <!-- row 2 -->
+        <g>
+          <rect class="ap" x="580" y="201" width="160" height="50" rx="7"/>
+          <text class="apt" x="660" y="221" text-anchor="middle">Submitted · Sealed</text><text class="ste" x="660" y="238" text-anchor="middle">Submitted · Sealed</text>
+          <rect class="st" x="405" y="201" width="130" height="50" rx="7"/>
+          <text class="stt" x="470" y="223" text-anchor="middle">Under Evaluation</text><text class="ste" x="470" y="239" text-anchor="middle">Under Evaluation</text>
+          <rect class="wd" x="225" y="201" width="130" height="50" rx="7"/>
+          <text class="wdt" x="290" y="223" text-anchor="middle">Awarded</text><text class="ste" x="290" y="239" text-anchor="middle">Awarded</text>
+        </g>
+        <!-- into submitted -->
+        <path class="tr" d="M660,111 V201" marker-end="url(#stG)"/><text class="tl" x="700" y="160">Approve &amp; submit</text>
+        <path class="tr" d="M470,111 V156 H620 V201" marker-end="url(#stG)"/><text class="tl" x="500" y="151">Submit directly within authority</text>
+        <!-- row2 leftward -->
+        <path class="tr" d="M580,226 H535" marker-end="url(#stG)"/><text class="tl" x="557" y="220" text-anchor="middle">Open bids</text>
+        <path class="tr" d="M405,226 H355" marker-end="url(#stG)"/><text class="tl" x="380" y="220" text-anchor="middle">Award</text>
+
+        <!-- row 3 fulfillment -->
+        <g>
+          <rect class="st" x="51" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="110" y="369" text-anchor="middle">PO Issued</text><text class="ste" x="110" y="385" text-anchor="middle">PO Issued</text>
+          <rect class="st" x="187" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="246" y="369" text-anchor="middle">Confirmed</text><text class="ste" x="246" y="385" text-anchor="middle">Confirmed</text>
+          <rect class="st" x="323" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="382" y="369" text-anchor="middle">Fulfillment</text><text class="ste" x="382" y="385" text-anchor="middle">Fulfillment</text>
+          <rect class="st" x="459" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="518" y="366" text-anchor="middle">Delivered &amp;</text><text class="stt" x="518" y="383" text-anchor="middle">Accepted</text>
+          <rect class="st" x="595" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="654" y="369" text-anchor="middle">Invoiced</text><text class="ste" x="654" y="385" text-anchor="middle">Invoiced</text>
+          <rect class="st" x="731" y="347" width="118" height="50" rx="7"/>
+          <text class="stt" x="790" y="369" text-anchor="middle">Settled</text><text class="ste" x="790" y="385" text-anchor="middle">Settled</text>
+          <rect class="cl" x="867" y="347" width="118" height="50" rx="7"/>
+          <text class="clt" x="926" y="369" text-anchor="middle">Closed</text><text class="ste" x="926" y="385" text-anchor="middle">Closed</text>
+        </g>
+        <!-- awarded to PO -->
+        <path class="tr" d="M290,251 V322 H110 V347" marker-end="url(#stG)"/>
+        <text class="tl" x="205" y="317" text-anchor="middle">Create contract / PO · lock price</text>
+        <!-- fulfillment arrows -->
+        <path class="tr" d="M169,372 H187" marker-end="url(#stG)"/>
+        <path class="tr" d="M305,372 H323" marker-end="url(#stG)"/>
+        <path class="tr" d="M441,372 H459" marker-end="url(#stG)"/>
+        <path class="tr" d="M577,372 H595" marker-end="url(#stG)"/>
+        <path class="tr" d="M713,372 H731" marker-end="url(#stG)"/>
+        <path class="tr" d="M849,372 H867" marker-end="url(#stG)"/>
+
+        <!-- exception pool -->
+        <rect x="790" y="56" width="222" height="224" rx="8" fill="#FCF7F7" stroke="#A14E50" stroke-width="1.3" stroke-dasharray="5 4"/>
+        <text x="901" y="80" text-anchor="middle" font-size="12.5" font-weight="700" fill="#A14E50">Exception / terminal states (archived)</text>
+        <rect class="chip" x="802" y="92" width="198" height="28" rx="4"/><text class="chipt" x="901" y="110" text-anchor="middle">Expired · validity lapsed / no award</text>
+        <rect class="chip" x="802" y="128" width="198" height="28" rx="4"/><text class="chipt" x="901" y="146" text-anchor="middle">Withdrawn · supplier declined</text>
+        <rect class="chip" x="802" y="164" width="198" height="28" rx="4"/><text class="chipt" x="901" y="182" text-anchor="middle">Cancelled · buyer cancelled</text>
+        <rect class="chip" x="802" y="200" width="198" height="28" rx="4"/><text class="chipt" x="901" y="218" text-anchor="middle">Failed · validation / system failure</text>
+        <rect class="chip" x="802" y="236" width="198" height="28" rx="4"/><text class="chipt" x="901" y="254" text-anchor="middle">Rejected · not awarded</text>
+
+        <!-- exception flows -->
+        <path class="bad" d="M470,111 V176 H790 V110" marker-end="url(#stR)"/>
+        <text class="badl" x="610" y="171" text-anchor="middle">Expired / withdrawn / cancelled / failed</text>
+        <path class="bad" d="M470,251 V304 H790 V250" marker-end="url(#stR)"/>
+        <text class="badl" x="620" y="299" text-anchor="middle">Not awarded</text>
+
+        <!-- saga compensation -->
+        <path class="cmp" d="M382,397 V462 H314 V255" marker-end="url(#stA)"/>
+        <text class="cmpl" x="560" y="486" text-anchor="middle">Fulfillment failure: Saga compensation → fall back to runner-up / re-run RFQ</text>
+      </svg>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:#fff;border:1.3px solid #C4C8CD;"></i>In progress</span>
+      <span><i class="sw gov"></i>HITL approval / sealed</span>
+      <span><i class="sw" style="background:#35705A;"></i>Award / fulfillment</span>
+      <span><i class="sw" style="background:#A14E50;"></i>Exception terminal</span>
+      <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#9A6A2F" stroke-width="1.6" stroke-dasharray="6 4"/></svg> Compensation flow</span>
+    </div>
+    <div class="note">State is persisted in the A2A Task and transaction-service stores; <b>every transition is an event with an idempotency key</b> written to an append-only event log (event sourcing), so any task can resume from a breakpoint, be replayed and audited. Sealed quotes are invisible to buyers, suppliers and the platform alike until the "open at deadline" transition triggers threshold decryption.</div>
+  </div>
+</section>
+
+<section id="engine">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">07</span><h2>Pricing Engine</h2></div>
+    <p class="sec-lead">The pricing engine is the supplier agent's core: it is an <b>"LLM language layer + deterministic decision pipeline + guardrails / approval routing"</b> structure. The LLM only parses requirements and handles negotiation; the price is computed by rules, cost models and constrained optimization inside an authorized feasible region, with hard guardrails and HITL approval at the boundary.</p>
+
+    <div class="sheet" style="padding:18px;">
+      <div class="ipo">
+        <div class="col in">
+          <h4><span class="dom buyer">INPUT</span> Decision basis</h4>
+          <ul>
+            <li><b>RFQ elements:</b> specs / quantity tiers / lead time / delivery location / incoterms</li>
+            <li><b>Cost data:</b> BOM, raw materials, labor, logistics, taxes &amp; duties (via MCP)</li>
+            <li><b>Supply capability:</b> inventory, ATP, CTP capacity (via MCP)</li>
+            <li><b>Commercial context:</b> customer tier, credit line, payment terms, historical deal prices</li>
+            <li><b>Market signals:</b> market prices, FX, competitive posture, demand elasticity</li>
+            <li><b>Authorization boundaries:</b> floor price, target margin, discount authority matrix</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h4><span class="dom market">CORE</span> Deterministic pricing decision pipeline</h4>
+          <ul>
+            <li><b>1 · Eligibility &amp; deliverability checks:</b> in-scope category, ATP/CTP, MOQ, lead-time feasibility</li>
+            <li><b>2 · Cost build-up:</b> cost breakdown (tax-inclusive / landed / total cost of ownership)</li>
+            <li><b>3 · Pricing strategy:</b> cost-plus / value-based / competitive / dynamic, with quantity tiers, bundling, payment-term combos</li>
+            <li><b>4 · Constraint solving &amp; guardrails:</b> price floor, target margin, authority matrix, validity lock, dumping / controlled-price / price-discrimination compliance</li>
+            <li><b>5 · Multi-objective trade-off:</b> feasible optimum across margin × win-rate × capacity utilization × risk</li>
+            <li><b>6 · Approval routing:</b> per the authority matrix, auto-send or escalate to HITL</li>
+          </ul>
+          <div class="llm-box">
+            <div class="t">LLM boundary (negotiation layer only — it does not set price)</div>
+            <p>Parses unstructured RFQs / drawings, handles clarification Q&amp;A, negotiation language and concession pacing, and produces explainable narratives; it may only negotiate within the feasible price range set in step 4. Any out-of-range, below-cost or compliance-hit request is blocked and routed to a human.</p>
+          </div>
+        </div>
+        <div class="col out">
+          <h4><span class="dom seller">OUTPUT</span> Structured quote</h4>
+          <ul>
+            <li><b>Quote body:</b> unit / tiered / total price, currency, taxes, incoterms, lead time, validity</li>
+            <li><b>Pricing rationale:</b> cost breakdown and pricing reason (explainable, auditable)</li>
+            <li><b>Confidence:</b> win probability and price-elasticity estimate</li>
+            <li><b>Counter-offer playbook:</b> concession pacing and walk-away (floor never leaves the domain)</li>
+            <li><b>Approval decision:</b> auto-approved / escalated, with reason</li>
+            <li><b>A2A Artifact:</b> signed, versioned quote artifact</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="note gov"><b>Why not let the LLM quote directly?</b> A pricing error is a direct, quantifiable and hard-to-recover financial loss, and LLM output is non-deterministic and easily swayed by negotiation language. Converging pricing to <b>"rules / optimization models solving a feasible region + hard guardrail constraints"</b>, with the LLM handling the language layer inside that region, keeps natural interaction while making every quote recomputable, explainable and accountable.</div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">08</span><h2>Trust, Security &amp; Governance</h2></div>
+    <p class="sec-lead">Cross-organization automated trading presupposes provable fairness, controllable autonomy and traceable accountability. Trust does not rely on assuming any party's goodwill; it is guaranteed jointly by identity, cryptography, risk control, permission boundaries and audit.</p>
+
+    <div class="grid3">
+      <div class="rel"><span class="pat">IDENTITY</span><h4>Strong Identity &amp; Least Privilege</h4><p>The Agent Card is bound to the organization's DID / mTLS certificate; OAuth2/OIDC issues scoped tokens; every message is signed with nonce / timestamp to prevent replay; agent actions are attributable to the organization.</p></div>
+      <div class="rel"><span class="pat">FAIRNESS</span><h4>Sealed Bids &amp; Fair Opening</h4><p>Before the deadline quotes are public-key encrypted or sealed inside a TEE, invisible to buyer, suppliers and platform; a trusted timestamp is used and threshold decryption / opening happens only at the deadline, preventing early leaks and covert price changes.</p></div>
+      <div class="rel"><span class="pat">ANTI-FRAUD</span><h4>Risk Control &amp; Anti-Collusion</h4><p>Detect near-identical quotes, related parties, IP / account clustering, abnormally low prices or cover-bidding patterns; build a supplier relationship graph; a collusion hit freezes the award and routes to compliance investigation.</p></div>
+      <div class="rel"><span class="pat">AUTONOMY BOUNDARY</span><h4>Autonomy Boundary &amp; HITL</h4><p>Configure the permission matrix by amount, discount depth, anomaly, supplier novelty and term deviation; in-policy actions run automatically, out-of-bounds actions escalate, red-line actions are denied outright.</p></div>
+      <div class="rel"><span class="pat">CONFIDENTIALITY</span><h4>Trade Secrets &amp; Data Minimization</h4><p>Cost, floor price, capacity and customer lists stay in each private domain; pricing completes locally; only authorized RFQ / Quote messages and necessary credentials cross domains, following data minimization and data sovereignty.</p></div>
+      <div class="rel"><span class="pat">AUDITABILITY</span><h4>End-to-End Audit &amp; Explainability</h4><p>RFQs, quotes, counter-offers, pricing rationale, approvals, bid opening and awards are all written to an append-only, hash-chained audit log — replayable, evidentiary and ready for regulatory inspection.</p></div>
+    </div>
+
+    <h4 style="margin:26px 0 4px;font-size:15px;">Human-in-the-Loop (HITL) Autonomy Permission Matrix <span style="font-weight:400;color:var(--ink3);font-size:12.5px;font-family:var(--sans);">— thresholds are configured per enterprise policy; the table below is an illustrative policy framework</span></h4>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup><col style="width:21%"><col style="width:25%"><col style="width:25%"><col style="width:29%"></colgroup>
+        <thead><tr><th>Decision scenario</th><th>Low risk <small style="font-weight:400;color:var(--ink3);">(small value · known supplier · standard)</small></th><th>Medium risk</th><th>High risk <small style="font-weight:400;color:var(--ink3);">(large value · new supplier · anomaly)</small></th></tr></thead>
+        <tbody>
+          <tr><td><b>RFQ intake · eligibility</b></td><td><span class="tag-auto">Auto</span> · accept on valid credentials</td><td><span class="tag-hitl">Auto</span> · extra qualification / credit checks</td><td><span class="tag-hitl">HITL</span> · manual verification of qualification documents</td></tr>
+          <tr><td><b>Quote amount</b></td><td><span class="tag-auto">Auto</span> · below threshold A</td><td><span class="tag-hitl">Manager approval</span> · thresholds A–B</td><td><span class="tag-deny">Multi-level / committee</span> · above threshold B</td></tr>
+          <tr><td><b>Discount / concession depth</b></td><td><span class="tag-auto">Auto</span> · within authorized range</td><td><span class="tag-hitl">Approval</span> · one extra discount step</td><td><span class="tag-deny">Deny</span> · breaking the cost floor / abnormal low price</td></tr>
+          <tr><td><b>Counter-offer</b></td><td><span class="tag-auto">Auto</span> · within negotiation strategy range</td><td><span class="tag-hitl">Approval</span> · approaching the floor</td><td><span class="tag-deny">No auto</span> · beyond floor requires a human</td></tr>
+          <tr><td><b>Award</b></td><td><span class="tag-auto">Auto</span> · unique in-policy optimum</td><td><span class="tag-hitl">HITL</span> · large / tied / disputed</td><td><span class="tag-deny">Multi-level + compliance</span> · very large / sole source / related-party deal</td></tr>
+          <tr><td><b>Contract term deviation</b></td><td><span class="tag-auto">Auto</span> · standard template terms</td><td><span class="tag-hitl">Approval</span> · non-core deviations</td><td><span class="tag-deny">Legal approval</span> · liability / compliance and other core terms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note gov"><b>Sealed-bid implementation notes:</b> the buyer's public key (or a TEE public key) encrypts each quote; the platform stores only ciphertext plus a trusted timestamp. After the RFQ deadline, the key becomes usable only via a threshold scheme (e.g. multi-party threshold signatures / TEE remote attestation), so no single party can decrypt anything before the deadline. The opening event and participant signatures are written on-chain / into the hash-chained log, letting every party independently verify that quotes were not tampered with and the opening was not advanced.</div>
+  </div>
+</section>
+
+<section id="reliability">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">09</span><h2>Reliability &amp; Cross-Organization Consistency</h2></div>
+    <p class="sec-lead">Cross-organization long transactions face unreliable networks, heterogeneous systems and partial failures. Reliability is not built on "every call succeeds", but on a set of distributed-consistency patterns that make failures replayable, operations idempotent and state eventually consistent.</p>
+    <div class="grid3">
+      <div class="rel"><span class="pat">PATTERN · 01</span><h4>Idempotency-Key Dedup</h4><p>Every RFQ, quote, counter-offer, award and order carries a globally unique <code>Idempotency-Key</code>; the receiver stores the key + result, so retries return the same result and never create duplicate quotes / orders / awards.</p></div>
+      <div class="rel"><span class="pat">PATTERN · 02</span><h4>Async-First with Timeout Fallback</h4><p>Long tasks never hold a blocking connection; they use SSE or webhook push with bounded waits. On timeout, query task status rather than blindly resubmit; a dead-letter queue (DLQ) plus alerting handles lost messages.</p></div>
+      <div class="rel"><span class="pat">PATTERN · 03</span><h4>Transactional Outbox / Inbox</h4><p>The sender atomically writes the business change and the message to an Outbox, then a relay publishes it; the receiver writes to an Inbox for dedup, guaranteeing "at-least-once delivery + idempotent processing = effectively once".</p></div>
+      <div class="rel"><span class="pat">PATTERN · 04</span><h4>Saga Compensation over Long Transactions</h4><p>Award → contract → fulfillment is split into local transactions with compensation actions; a failure (e.g. winner cannot fulfill) triggers compensation: cancel PO → fall back to runner-up / re-run RFQ, rather than a distributed two-phase commit.</p></div>
+      <div class="rel"><span class="pat">PATTERN · 05</span><h4>Validity &amp; Price Lock</h4><p>Every quote carries validity; within validity the supplier honors the locked price and stock; after expiry it lapses or is re-confirmed; at award the price is locked to prevent "quote ≠ order price" disputes.</p></div>
+      <div class="rel"><span class="pat">PATTERN · 06</span><h4>Reconciliation &amp; Replay</h4><p>Scheduled reconciliation across buyer, supplier, platform and settlement (four-party), with the event log / conversation log as the source of truth; discrepancies auto-alert and are replayed to the last consistent point.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="deployment">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">10</span><h2>Federated Deployment</h2></div>
+    <p class="sec-lead">Agents are not centralized on one platform; each organization runs its own agent inside its own security boundary and only exposes an A2A endpoint outward, while the marketplace provides neutral discovery, matching and sealed-bid witnessing. This satisfies data sovereignty and private / multi-cloud deployment.</p>
+    <div class="sheet" style="padding:18px;">
+      <div class="deploy">
+        <!-- buyer org -->
+        <div class="org buyer-org">
+          <div class="org-title"><span class="dom buyer">BUYER ORG</span> Private VPC / tenant</div>
+          <div class="stack-item">Buyer Agent <small>Buyer-side runtime</small></div>
+          <div class="stack-item">Procurement / finance / ERP <small>Internal systems</small></div>
+          <div class="stack-item">MCP tool gateway <small>Least-privilege internal calls</small></div>
+          <div class="stack-item">Identity &amp; secrets <small>KMS · mTLS certs</small></div>
+        </div>
+        <!-- middle -->
+        <div class="mid-col">
+          <div class="mid-node">A2A Protocol Network<small>JSON-RPC · SSE · Webhook</small><small>mTLS · signed messages · idempotency · encryption</small></div>
+          <div class="link-label">mTLS + signed A2A messages</div>
+          <div class="mid-node">Registry &amp; Discovery<small>Agent Card · credentials · reputation</small></div>
+          <div class="link-label">Sealed ciphertext / opening witness</div>
+          <div class="mid-node">Neutral matching / sealed bid opening<small>TEE · trusted timestamp · audit witness</small></div>
+        </div>
+        <!-- supplier org -->
+        <div class="org seller-org">
+          <div class="org-title"><span class="dom seller">SUPPLIER ORG ×N</span> Private boundary</div>
+          <div class="stack-item">Supplier Agent A / B / … <small>Supplier-side runtime</small></div>
+          <div class="stack-item">ERP / WMS / APS / pricing <small>Inventory · capacity · cost</small></div>
+          <div class="stack-item">MCP tool gateway <small>Pricing completes in-domain</small></div>
+          <div class="stack-item">Floor price &amp; cost <small>Never leave the domain</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">Deployment is <b>federated</b> rather than "all agents on one platform": each organization deploys its own agent in its own VPC / tenant, keeps its data, and only exposes an A2A endpoint; the marketplace provides neutral discovery, matching and sealed-bid witnessing. This satisfies data sovereignty, multi-cloud / on-premise and private deployment requirements, and avoids a single platform holding all trade secrets. A neutral operator may be a third-party marketplace, an industry consortium, or a mutually trusted managed service.</div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">11</span><h2>Reference Technology Stack</h2></div>
+    <p class="sec-lead">The table is a capability-level reference, not a prescribed bill of materials: every component is replaceable as long as it speaks the A2A protocol and honors the data contracts. Start minimal and add components as scale grows.</p>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup><col style="width:20%"><col style="width:38%"><col style="width:42%"></colgroup>
+        <thead><tr><th>Capability layer</th><th>Key requirement</th><th>Reference options (replaceable)</th></tr></thead>
+        <tbody>
+          <tr><td><b>Agent orchestration / runtime</b></td><td>Multi-step planning, tool calls, memory, HITL interrupts, state persistence</td><td class="mono">LangGraph / AutoGen / Google ADK + custom runtime</td></tr>
+          <tr><td><b>A2A protocol</b></td><td>Agent discovery, tasks, messages, streaming, push</td><td class="mono">A2A protocol + official SDK (JSON-RPC / SSE / webhook)</td></tr>
+          <tr><td><b>MCP tool layer</b></td><td>Connecting internal systems, tools and data</td><td class="mono">MCP server / client + internal API adapters</td></tr>
+          <tr><td><b>Data contracts</b></td><td>RFQ / Quote / order structured schema</td><td class="mono">JSON Schema, OpenAPI; EDI / OAGIS for legacy systems</td></tr>
+          <tr><td><b>LLM &amp; gateway</b></td><td>Multi-model, routing, rate limiting, token audit, cost control</td><td class="mono">LiteLLM-class gateway + multiple model providers</td></tr>
+          <tr><td><b>Backend services</b></td><td>Business logic, high concurrency, internal APIs</td><td class="mono">Java / Go / Python + gRPC / REST</td></tr>
+          <tr><td><b>Rules / policy engine</b></td><td>Eligibility, pricing guardrails, authority matrix</td><td class="mono">Drools / OPA (Rego) / custom DSL</td></tr>
+          <tr><td><b>Workflow / Saga</b></td><td>Long transactions, compensation, retry, timers</td><td class="mono">Temporal / Camunda / custom state machine</td></tr>
+          <tr><td><b>Messaging / events</b></td><td>Async, Outbox/Inbox, event bus</td><td class="mono">Kafka / RabbitMQ / cloud MQ</td></tr>
+          <tr><td><b>Storage</b></td><td>Business data, vectors, conversation / task state</td><td class="mono">PostgreSQL + pgvector / Milvus, object storage</td></tr>
+          <tr><td><b>Security / trust</b></td><td>Identity, secrets, certificates, sealed bids</td><td class="mono">Keycloak, Vault, KMS, CA, TEE / threshold crypto</td></tr>
+          <tr><td><b>Observability</b></td><td>Tracing, metrics, logs across agents</td><td class="mono">OpenTelemetry + Prometheus / Grafana / ELK</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">Start with a minimal viable stack — one orchestration framework + one language runtime + PostgreSQL + one message queue + the A2A SDK — and add TEE, a vector store and a dedicated workflow engine as scale grows; the open protocol keeps every layer swappable.</div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">12</span><h2>Phased Rollout Roadmap</h2></div>
+    <p class="sec-lead">Deliver in five milestones from point-to-point connection to a federated network. Each milestone ships standalone value; autonomy and trust mechanisms are introduced progressively rather than all at once.</p>
+    <div class="sheet" style="padding:22px 20px 20px;">
+      <div class="road">
+        <div class="mile"><div class="m-time">M1 · 0–2 mo</div><div class="rail"></div><h4>Point-to-point connected</h4><p>One buyer + one supplier; Agent Card discovery; RFQ / quote over A2A; basic rule-based pricing; manual approval; the happy path works end to end.</p></div>
+        <div class="mile"><div class="m-time">M2 · 2–4 mo</div><div class="rail"></div><h4>Multi-supplier comparison</h4><p>Fan out RFQs to N suppliers; quote normalization and TCO comparison; SSE + webhook; idempotency / Outbox; validity and price locking.</p></div>
+        <div class="mile"><div class="m-time">M3 · 4–6 mo</div><div class="rail"></div><h4>Autonomy &amp; bidding</h4><p>Pricing engine with multi-objective optimization; multi-round negotiation; authority-matrix HITL; MCP integration with ERP / WMS / APS; rules engine.</p></div>
+        <div class="mile"><div class="m-time">M4 · 6–9 mo</div><div class="rail"></div><h4>Trusted closed loop</h4><p>Sealed bids + TEE / threshold opening; risk control &amp; anti-collusion; Saga compensation; contract / PO / e-signature / reconciliation; full audit trail.</p></div>
+        <div class="mile"><div class="m-time">M5 · 9–12 mo</div><div class="rail"></div><h4>Scale &amp; federation</h4><p>Multi-tenant / multi-region; reputation and credential network; reverse auction / dynamic pricing; industry templates; federated governance and compliance certification.</p></div>
+      </div>
+    </div>
+    <div class="note">Do not wait for the full trust / federation stack to launch: M1–M2 already replace most manual email / portal quoting; M3–M4 raise autonomy and trust; M5 turns the system into a network effect.</div>
+  </div>
+</section>
+
+<section id="risk">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">13</span><h2>Key Risks &amp; Mitigations</h2></div>
+    <p class="sec-lead">The main risks concentrate on model reliability, pricing authority, bidding fairness, data confidentiality and network adoption; each has an architectural control rather than relying on operator vigilance.</p>
+    <div class="tbl-wrap">
+      <table>
+        <colgroup><col style="width:24%"><col style="width:30%"><col style="width:46%"></colgroup>
+        <thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td><b>LLM hallucination / misreads specs</b></td><td>Wrong quote, wrong goods, financial loss</td><td>Structured schema + deterministic extraction validation; ambiguous fields trigger clarification; the LLM never prices; regression tests on RFQ parsing.</td></tr>
+          <tr><td><b>Unauthorized below-floor quote</b></td><td>Direct margin loss / dumping</td><td>Hard guardrails in the pricing pipeline; the floor is enforced in code, not in a prompt; authority matrix + HITL; dual control for over-discount.</td></tr>
+          <tr><td><b>Leak of sealed bids / collusion</b></td><td>Unfair competition, legal liability</td><td>Public-key / TEE sealing; threshold opening at the deadline; trusted timestamp; anti-collusion relationship graph; hash-chained opening evidence.</td></tr>
+          <tr><td><b>Trade-secret leakage across domains</b></td><td>Loss of cost / customer data</td><td>Pricing stays in-domain; MCP least privilege; data minimization; no raw cost in cross-domain messages; mTLS + field-level encryption.</td></tr>
+          <tr><td><b>Cross-org inconsistency / duplicate orders</b></td><td>Duplicate quotes / orders, reconciliation disputes</td><td>Idempotency keys; Outbox / Inbox; Saga compensation; four-party reconciliation; quote validity &amp; price lock.</td></tr>
+          <tr><td><b>Agent identity spoofing / replay</b></td><td>Fake RFQs / fake quotes, fraud</td><td>DID / VC + mTLS + OAuth2; signed messages with nonce / timestamp; certificate revocation; binding to a legal entity.</td></tr>
+          <tr><td><b>Vendor / model lock-in</b></td><td>Cannot switch agents or models</td><td>Open A2A protocol + JSON Schema contracts; LLM-gateway abstraction; replaceable components; no proprietary message formats.</td></tr>
+          <tr><td><b>Poor supplier adoption / sparse network</b></td><td>Few quotes, weak competition</td><td>Lower onboarding cost (publish an Agent Card to join); provide a reference agent and adapters; start in one category / region; reputation incentives.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="contract">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">14</span><h2>Protocol Split &amp; Data Contracts</h2></div>
+    <p class="sec-lead">A2A and MCP are complementary, not competing: <b>A2A is the external "inter-agent collaboration language" across organizations; MCP is the internal "agent-to-tool / data interface" inside an organization.</b> Exposing internal cost tools directly to external agents, or using MCP for cross-organization negotiation, breaks both the trust boundary and the protocol boundary.</p>
+
+    <div class="grid2">
+      <div class="sheet" style="margin:0;border-top:3px solid var(--market);">
+        <h4>A2A — Agent ↔ Agent <span class="dom market">cross-organization</span></h4>
+        <ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--ink2);line-height:1.9;">
+          <li><b>Scope:</b> cross-organization, cross-trust-domain task collaboration</li>
+          <li><b>Carries:</b> RFQ, Quote, negotiation, award and other business tasks (Task / Message / Artifact)</li>
+          <li>Stateful, long-lived, multi-turn, async streaming / push</li>
+          <li><b>Identity:</b> organization-level DID / mTLS / verifiable credentials</li>
+          <li><b>Example:</b> buyer agent → supplier agent: "quote these 500 parts, reply within 3 days"</li>
+        </ul>
+      </div>
+      <div class="sheet" style="margin:0;border-top:3px solid var(--seller);">
+        <h4>MCP — Agent ↔ Tools / Data <span class="dom seller">inside organization</span></h4>
+        <ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--ink2);line-height:1.9;">
+          <li><b>Scope:</b> an agent connecting to internal tools and data within one trust domain</li>
+          <li><b>Carries:</b> tool discovery and invocation (resources / tools / prompts)</li>
+          <li>Usually short request / response; exposes capabilities, not business conversations</li>
+          <li><b>Identity:</b> internal service accounts / least-privilege scopes</li>
+          <li><b>Example:</b> supplier agent → internal ERP: "query inventory and standard cost for SKU-123"</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note" style="margin-top:18px;"><b>Data-contract boundary:</b> cross-domain messages carry only the RFQ and the Quote (business semantics); internal cost build-up, floor price, capacity and customer master data are invoked by the agent through MCP inside the private domain and are <b>never</b> serialized into A2A messages. This keeps the external protocol minimal and stable while internal systems can evolve freely.</div>
+
+    <div class="grid2" style="margin-top:18px;">
+      <div>
+        <h4 style="font-size:13.5px;margin-bottom:9px;color:var(--ink2);font-family:var(--mono);font-weight:500;">Agent Card (discovery metadata)</h4>
+<pre class="code"><span class="c">// GET https://agent.supplier-a.example/.well-known/agent.json</span>
+{
+  <span class="k">"name"</span>: <span class="s">"Supplier-A Quoting Agent"</span>,
+  <span class="k">"description"</span>: <span class="s">"Accepts standard-part RFQs and returns automated quotes"</span>,
+  <span class="k">"url"</span>: <span class="s">"https://agent.supplier-a.example/a2a"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.4.0"</span>,
+  <span class="k">"capabilities"</span>: {
+    <span class="k">"streaming"</span>: <span class="n">true</span>,
+    <span class="k">"pushNotifications"</span>: <span class="n">true</span>,
+    <span class="k">"statefulAuth"</span>: <span class="n">true</span>
+  },
+  <span class="k">"defaultInputModes"</span>: [<span class="s">"text"</span>, <span class="s">"application/json"</span>],
+  <span class="k">"defaultOutputModes"</span>: [<span class="s">"text"</span>, <span class="s">"application/json"</span>],
+  <span class="k">"skills"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"rfq_quoting"</span>,
+      <span class="k">"name"</span>: <span class="s">"RFQ Quoting"</span>,
+      <span class="k">"description"</span>: <span class="s">"Intake standard-part / MRO RFQs, run ATP and cost checks, and return a sealed structured quote"</span>,
+      <span class="k">"tags"</span>: [<span class="s">"rfq"</span>, <span class="s">"quoting"</span>, <span class="s">"b2b"</span>, <span class="s">"sealed-bid"</span>],
+      <span class="k">"inputModes"</span>: [<span class="s">"application/json"</span>],
+      <span class="k">"outputModes"</span>: [<span class="s">"application/json"</span>]
+    }
+  ],
+  <span class="k">"securitySchemes"</span>: {
+    <span class="k">"mtls"</span>: { <span class="k">"type"</span>: <span class="s">"mTLS"</span> },
+    <span class="k">"oidc"</span>: { <span class="k">"type"</span>: <span class="s">"oauth2"</span> }
+  },
+  <span class="k">"supportsAuthenticatedExtendedCard"</span>: <span class="n">true</span>
+}</pre>
+      </div>
+      <div>
+        <h4 style="font-size:13.5px;margin-bottom:9px;color:var(--ink2);font-family:var(--mono);font-weight:500;">Quote Artifact (structured output)</h4>
+<pre class="code">{
+  <span class="k">"quoteId"</span>: <span class="s">"Q-2026-0001"</span>,
+  <span class="k">"rfqId"</span>: <span class="s">"RFQ-2026-0817"</span>,
+  <span class="k">"supplierId"</span>: <span class="s">"SUP-A"</span>,
+  <span class="k">"version"</span>: <span class="s">"v2"</span>,
+  <span class="k">"currency"</span>: <span class="s">"CNY"</span>,
+  <span class="k">"incoterms"</span>: <span class="s">"DDP"</span>,
+  <span class="k">"lines"</span>: [
+    { <span class="k">"sku"</span>: <span class="s">"PN-44021"</span>, <span class="k">"qty"</span>: <span class="n">500</span>,
+      <span class="k">"unitPrice"</span>: <span class="n">78.40</span>, <span class="k">"leadTimeDays"</span>: <span class="n">21</span> }
+  ],
+  <span class="k">"totalAmount"</span>: <span class="n">39200.00</span>,
+  <span class="k">"taxIncluded"</span>: <span class="n">true</span>,
+  <span class="k">"validUntil"</span>: <span class="s">"2026-09-30T23:59:59+08:00"</span>,
+  <span class="k">"paymentTerms"</span>: <span class="s">"Net 60"</span>,
+  <span class="k">"sealed"</span>: <span class="n">true</span>,
+  <span class="k">"approvalLevel"</span>: <span class="s">"AUTO_WITHIN_AUTHORITY"</span>,
+  <span class="k">"rationaleRef"</span>: <span class="s">"artifact://pricing/Q-2026-0001/rationale"</span>,
+  <span class="k">"signature"</span>: <span class="s">"base64:…(signed by supplier agent key)"</span>
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>A2A Automated Quoting System · Architecture Design v1.0 (conceptual / illustrative)</span>
+    <span>Protocol fields follow the official A2A specification · components denote capabilities, not physical deployment constraints</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  try{
+    var links=document.querySelectorAll('#navlinks a');
+    var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+    var secs=document.querySelectorAll('section[id]');
+    if(!('IntersectionObserver' in window)||!secs.length)return;
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){if(e.isIntersecting){
+        links.forEach(function(a){a.classList.remove('active');});
+        var a=map[e.target.id];if(a){a.classList.add('active');
+          a.scrollIntoView({block:'nearest',inline:'center'});}
+      }});
+    },{rootMargin:'-20% 0px -70% 0px'});
+    secs.forEach(function(s){io.observe(s);});
+  }catch(e){/* no-op: nav remains clickable */}
+})();
+</script>
+</body>
+</html>
